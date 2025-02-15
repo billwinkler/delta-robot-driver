@@ -3,9 +3,10 @@
             [clojure.java.io :as io])
   (:import [java.nio ByteBuffer ByteOrder]))
 
-;; Function to encode a single motor's command as a vector of 5 integers.
+;; Function to encode a single motor's command as a vector of 6 integers.
 (defn encode-motor-command [motor]
-  [(int (:total-pulses motor))
+  [(int (:motor-number motor))
+   (int (:total-pulses motor))
    (int (:target-freq motor))
    (int (:accel-pulses motor))
    (int (:decel-pulses motor))
@@ -15,14 +16,12 @@
 (defn encode-command [cmd]
   (let [motors (:motors cmd)
         num-motors (count motors)
-        ;; Each motor contributes 5 ints; plus 1 int for the header (number of motors)
-        total-ints (+ 1 (* num-motors 5))
+        ;; Each motor contributes 6 ints; plus 1 int for the header (number of motors)
+        total-ints (* num-motors 6)
         buf (ByteBuffer/allocate (* total-ints 4))]
     ;; Set the byte order (adjust if needed—here we use LITTLE_ENDIAN)
     (.order buf ByteOrder/LITTLE_ENDIAN)
     ;; Write the number of motors as the header
-    (.putInt buf num-motors)
-    ;; Write each motor’s parameters into the buffer
     (doseq [motor motors]
       (doseq [i (encode-motor-command motor)]
         (.putInt buf i)))
@@ -52,17 +51,20 @@
 
 
 (comment
-  (let [cmd {:motors [{:total-pulses 1000
+  (let [cmd {:motors [{:motor-number 0
+                       :total-pulses 1000
                        :target-freq 400
                        :accel-pulses 100
                        :decel-pulses 100
                        :direction 1}
-                      {:total-pulses 1200
+                      {:motor-number 1
+                       :total-pulses 1200
                        :target-freq 450
                        :accel-pulses 100
                        :decel-pulses 100
                        :direction 0}
-                      {:total-pulses 1100
+                      {:motor-number 2
+                       :total-pulses 1100
                        :target-freq 420
                        :accel-pulses 100
                        :decel-pulses 100
