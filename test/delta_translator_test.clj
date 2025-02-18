@@ -11,27 +11,18 @@
   (testing "Encode a single motor command"
     (let [motor {:motor-number 1
                  :total-pulses 1000
-                 :target-freq 400
-                 :accel-pulses 100
-                 :decel-pulses 100
                  :direction 1}
           encoded (encode-motor-command motor)]
-      (is (= [1 1000 400 100 100 1] encoded)))))
+      (is (= [1 1000 1] encoded)))))
 
 ;; Test that a full command with multiple motors is encoded as expected.
 (deftest test-encode-command
   (testing "Encode full command for multiple motors"
     (let [cmd {:motors [{:motor-number 0
                          :total-pulses 1000
-                         :target-freq 400
-                         :accel-pulses 100
-                         :decel-pulses 100
                          :direction 1}
                         {:motor-number 1
                          :total-pulses 1200
-                         :target-freq 450
-                         :accel-pulses 110
-                         :decel-pulses 110
                          :direction 0}]}
           buf (encode-command cmd)
           ;; Read out the ints from the ByteBuffer.
@@ -39,16 +30,13 @@
           num-ints (/ (.limit buf) 4)
           ints (doall (for [_ (range num-ints)]
                         (.getInt buf)))]
-      (is (= [0 1000 400 100 100 1 1 1200 450 110 110 0] ints)))))
+      (is (= [0 1000 1 1 1200 0] ints)))))
 
 ;; Test the binary write function using a temporary file.
 (deftest test-write-binary-message
   (testing "Write binary message to a temporary file"
     (let [cmd {:motors [{:motor-number 2
                          :total-pulses 1000
-                         :target-freq 400
-                         :accel-pulses 100
-                         :decel-pulses 100
                          :direction 1}]}
           buf (encode-command cmd)
           ;; Create a temporary file.
@@ -62,13 +50,10 @@
             (.order buf-read ByteOrder/LITTLE_ENDIAN)
             (is (= 2 (.getInt buf-read)))        ; motor-number
             (is (= 1000 (.getInt buf-read)))     ; motor: total-pulses
-            (is (= 400 (.getInt buf-read)))      ; target-freq
-            (is (= 100 (.getInt buf-read)))      ; accel-pulses
-            (is (= 100 (.getInt buf-read)))      ; decel-pulses
             (is (= 1 (.getInt buf-read))))))
       (.delete tmp-file))))
 
 ;; Run the tests when using Babashka or nbb with the --test flag.
-;; C-u C-v C-f C-d
+;; C-u C-c C-v C-f C-d
 (run-tests)
-;; => {:test 3, :pass 8, :fail 0, :error 0, :type :summary}
+;; => {:test 3, :pass 4, :fail 1, :error 0, :type :summary}
