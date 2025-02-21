@@ -17,10 +17,10 @@
         t2 (* theta2 deg-to-rad)
         t3 (* theta3 deg-to-rad)
         ;; Robot geometry constants (example values – adjust as needed)
-        e 115.0
-        f 457.3
-        rf 200.0
-        re 431.8
+        e 30
+        f 60
+        rf 50
+        re 80
         ;; Trigonometric constants
         sin30 (Math/sin (/ pi 6))   ; 0.5
         tan30 (Math/tan (/ pi 6))   ; ≈0.57735
