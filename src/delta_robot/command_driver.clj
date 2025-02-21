@@ -1,4 +1,4 @@
-(ns command-driver
+(ns delta-robot.command-driver
   (:require [babashka.process :refer [sh]]
             [clojure.java.io :as io])
   (:import [java.io ByteArrayOutputStream DataOutputStream]))
@@ -58,6 +58,14 @@
     (dotimes [n 3]
       (do (send-commands up)
           (send-commands dn))))
+
+  (let [pulse0 6000
+        pulse1 5000
+        pulse2 4000
+        dn [{:motor-number 0 :total-pulses pulse0 :direction 1}
+            {:motor-number 1 :total-pulses pulse1 :direction 1}
+            {:motor-number 2 :total-pulses pulse2 :direction 1}]]
+    (send-commands dn))
 
   )
 ;; => nil

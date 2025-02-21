@@ -49,14 +49,14 @@
 
 (comment
   (let [cmd {:motors [{:motor-number 1
-                       :total-pulses 1200
+                       :total-pulses 100
                        :direction 0}
                       {:motor-number 0
                        :total-pulses 1200
                        :direction 0}
                       {:motor-number 2
-                       :total-pulses 1200
-                       :direction 0}]}
+                       :total-pulses 800
+                       :direction 0}]`}
         buf (encode-command cmd)
         out-file "/tmp/delta_robot"]
     (write-binary-message out-file buf))

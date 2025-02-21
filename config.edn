@@ -1,0 +1,9 @@
+{:upper-arm-length 50 ;; arm attached to the motor
+ :lower-arm-length 80 ;; arm attached to the effector
+ :base-edge 60        ;; length of a leg of the base triangle
+ :effector-edge 30    ;; length of a leg of the effector triangle.
+ :max-angle 85        ;; fully extended
+ :min-angle -28       ;; fully retracted
+ :steps-per-rev 3200  ;; stepper pulses per revolution
+ }
+
