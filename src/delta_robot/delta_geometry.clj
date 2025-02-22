@@ -187,4 +187,88 @@
 (println "Extended (z=115) corrected:" (delta-calc-inverse-corrected 0 0 115))
 ;; Extended (z=115) corrected: {:theta1 263.0876639110111, :theta2 263.0876639110111, :theta3 263.0876639110111}
 
+(let [neutral (delta-calc-inverse 0 0 43)
+      raw-ext (delta-calc-inverse 0 0 115)]
+  (if (and neutral raw-ext)
+    (let [neutral-theta (:theta1 neutral)
+          raw-ext-theta (:theta1 raw-ext)
+          raw-deviation (- raw-ext-theta neutral-theta)
+          adjust-factor (- 301.5 360)
+          new-k-extend (/ adjust-factor raw-deviation)]
+      (println "New k-extend:" new-k-extend))
+    (println "Calibration z-point unreachable in the model.")))
 
+(defn correct-theta [theta-raw new-k-extend]
+  "Corrects a raw theta value so that neutral becomes 0 and the extended side is scaled.
+   new-k-extend is the calibrated factor for extended (negative) values."
+  (let [neutral (:theta1 (delta-calc-inverse 0 0 43))
+        raw (- theta-raw neutral)]
+    (if (>= raw 0)
+      ;; For retracted angles, keep the previous scaling (or recalc similarly)
+      (* raw 1.133)
+      ;; For extended angles, apply the new k-extend and remap into 0-360.
+      (mod (+ 360 (* raw new-k-extend)) 360))))
+
+(defn delta-calc-inverse-corrected
+  "Inverse kinematics with corrected theta angles.
+   Given the end-effector position (x, y, z) in physical coordinates,
+   returns a map with keys :theta1, :theta2, :theta3 corresponding to the physical angles.
+   Angles are measured as positive (clockwise) from the x-axis, with 0° at neutral."
+  [x y z new-k-extend]
+  (let [{theta1 :theta1 theta2 :theta2 theta3 :theta3 :as raw}
+        (delta-calc-inverse x y z)]
+    (if (or (nil? theta1) (nil? theta2) (nil? theta3))
+      nil
+      {:theta1 (correct-theta theta1 new-k-extend)
+       :theta2 (correct-theta theta2 new-k-extend)
+       :theta3 (correct-theta theta3 new-k-extend)})))
+
+(delta-calc-inverse-corrected 0 0 115 0.7575)
+;; => {:theta1 301.50510391441503,
+;;     :theta2 301.50510391441503,
+;;     :theta3 301.50510391441503}
+
+(def physical-model
+  [{:z 28.637 :theta1 25}
+   {:z 30.490 :theta1 20}
+   {:z 32.825 :theta1 15}
+   {:z 35.699 :theta1 10}
+   {:z 39.158 :theta1 5}
+   {:z 43.220 :theta1 0}
+   {:z 47.873 :theta1 355}
+   {:z 53.064 :theta1 350}
+   {:z 58.707 :theta1 345}
+   {:z 64.692 :theta1 340}
+   {:z 70.898 :theta1 335}
+   {:z 77.202 :theta1 330}
+   {:z 83.485 :theta1 325}
+   {:z 89.639 :theta1 320}
+   {:z 95.566 :theta1 315}
+   {:z 101.181 :theta1 310}
+   {:z 111.191 :theta1 300}
+   {:z 115.469 :theta1 295}
+   {:z 119.201 :theta1 290}
+   {:z 122.352 :theta1 285}
+   {:z 124.897 :theta1 280}
+   {:z 126.817 :theta1 275}])
+
+
+(doseq [{:keys [z theta1] :as m} physical-model]
+  (if-let [inv (delta-calc-inverse-corrected 0 0 z 0.7575)]
+    (let [computed (:theta1 inv)
+          err (- theta1 computed)]
+      (println (assoc m :theta computed :err err)))
+    (println "No valid inverse solution for z =" z)))
+
+
+(for [z (range 45 120 10)
+      :let [theta1 (:theta1 (delta-calc-inverse-corrected 0 0 z 0.7575))]]
+  [z theta1])
+;; => ([45 358.29256463148795]
+;;     [55 350.5554009055923]
+;;     [65 343.5752786483857]
+;;     [75 336.85407971763635]
+;;     [85 330.02415216324397]
+;;     [95 322.67407045663396]
+;;     [105 314.06490550791807]
+;;     [115 301.50510391441503])
