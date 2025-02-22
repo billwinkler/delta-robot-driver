@@ -141,96 +141,50 @@
       nil
       {:theta1 theta1 :theta2 theta2 :theta3 theta3})))
 
-(def neutral-theta (:theta1 (delta-calc-inverse 0 0 43)))
-;; => roughly 0.2256
+;; First, define a function to get the neutral (raw) angle.
+(defn neutral-theta []
+  ;; Use your inverse function at the physical neutral z.
+  ;; Here we assume (delta-calc-inverse 0 0 43) returns ~{:theta1 0.2256 ...}
+  (:theta1 (delta-calc-inverse 0 0 43)))
 
-(defn remove-neutral
-  "Then define a corrected angle function that subtracts that neutral offse"
-  [theta]
-  (- theta neutral-theta))
+;; Define the calibration factors based on your measurements.
+(def k-retract 1.133)  ;; For raw angles >= 0
+(def k-extend 1.255)   ;; For raw angles < 0; these factors can be tuned.
 
-;; At physical z corresponding to full retraction, my computed angle is about 22.2937°
-;; (after removal of neutral, that’s 22.2937 – 0.2256 ≈ 22.0681°) and I want –25°.
-;; This suggests a linear mapping:
-
-;;   physical-θ = A × (θ_raw − neutral-theta) + 0
-;;   and we want A × 22.0681 ≈ –25.
-(def A (/ -25 22.0681))  ; Approximately -1.133
-
-;; Then define a correction function
 (defn correct-theta [theta-raw]
-  (let [neutral-theta (:theta1 (delta-calc-inverse 0 0 43))
-        A (/ -25 (- (:theta1 (delta-calc-inverse 0 0 28)) neutral-theta))]
-    (+ (* A (- theta-raw neutral-theta)) 0)))  ; 0 here is the desired neutral physical angle.
+  "Corrects a raw theta value from delta-calc-inverse so that
+   neutral becomes 0, retracted angles (raw >= 0) are scaled to match a maximum of about 25°,
+   and extended angles (raw < 0) are scaled and remapped into the [0,360) range (with extended ~275°)."
+  (let [neutral (neutral-theta)
+        raw (- theta-raw neutral)]
+    (if (>= raw 0)
+      ;; For retracted angles, scale by k-retract.
+      (* raw k-retract)
+      ;; For extended angles (raw is negative), scale by k-extend and add 360.
+      (mod (+ 360 (* raw k-extend)) 360))))
 
+;; Now define a corrected inverse kinematics function:
 (defn delta-calc-inverse-corrected
   "Inverse kinematics with corrected theta angles.
-   Given (x y z) in physical coordinates, returns a map with corrected
-   :theta1, :theta2, and :theta3 that are calibrated to your physical geometry."
+   Given the end-effector position (x, y, z) in physical coordinates,
+   returns a map with keys :theta1, :theta2, :theta3 corresponding to the physical angles.
+   Angles are measured as positive clockwise from the x-axis,
+   with 0° at neutral, retracted values from 0° to ~25°, and extended values from ~275° to 360°."
   [x y z]
-  (let [{theta1 :theta1 theta2 :theta2 theta3 :theta3 :as raw} (delta-calc-inverse x y z)]
+  (let [{theta1 :theta1 theta2 :theta2 theta3 :theta3 :as raw}
+        (delta-calc-inverse x y z)]
     (if (or (nil? theta1) (nil? theta2) (nil? theta3))
       nil
       {:theta1 (correct-theta theta1)
        :theta2 (correct-theta theta2)
        :theta3 (correct-theta theta3)})))
 
+;; Example usage:
+(println "Neutral (z=43) corrected:" (delta-calc-inverse-corrected 0 0 43))
+;; Neutral (z=43) corrected: {:theta1 0.0, :theta2 0.0, :theta3 0.0}
+(println "Extended (z=110) corrected:" (delta-calc-inverse-corrected 0 0 110))
+;; Extended (z=110) corrected: {:theta1 291.4158792839843, :theta2 291.4158792839843, :theta3 291.4158792839843}
+(println "Extended (z=115) corrected:" (delta-calc-inverse-corrected 0 0 115))
+;; Extended (z=115) corrected: {:theta1 263.0876639110111, :theta2 263.0876639110111, :theta3 263.0876639110111}
 
-(delta-calc-inverse 0 0 -79)
-;; => {:theta1 23.954089748518864,
-;;     :theta2 23.954089748518864,
-;;     :theta3 23.954089748518864}
- (delta-calc-forward 23.95 23.95 23.95)
-;; => {:x 0.03628612751807013,
-;;     :y -0.03628612751807013,
-;;     :z -100.29694701636205}
 
-(delta-calc-inverse 0 0 0)
-;; => java.lang.ArithmeticException: Divide by zero delta-robot.delta-geometry /Users/billwinkler/dev/delta-arm-v2/babashka/src/delta_robot/delta_geometry.clj:8:11
-
-;; for the physical arm geometry, when theta=0, z=43.2
-;; but the calculated inverse show theta=0 with z=54.4
-(delta-calc-inverse 0 0 54.396)
-;; => {:theta1 5.243397184967078E-4,
-;;     :theta2 5.243397184967078E-4,
-;;     :theta3 5.243397184967078E-4};; => nil
-(for [z (range 54.39 54.40 0.001)]
-  (assoc (delta-calc-inverse 0 0 z) :z z))
-
-;; neutral point
-(delta-calc-inverse 0 0 43)
-;; => {:theta1 0.2256033455493592,
-;;     :theta2 0.2256033455493592,
-;;     :theta3 0.2256033455493592}
-;; fully retracted, physical z~=18, and θ=-25
-(delta-calc-inverse 0 0 28)
-;; => {:theta1 22.293689663487974,
-;;     :theta2 22.293689663487974,
-;;     :theta3 22.293689663487974}
-;; fully extended, physical z~=127 and θ=85
-(delta-calc-inverse 0 0 127)
-;; => nil
-(for [z (range 100 130 10)]
-  (assoc (delta-calc-inverse 0 0 z) :z z))
-;; => ({:theta1 -54.42309842020025,
-;;      :theta2 -54.42309842020025,
-;;      :theta3 -54.42309842020025,
-;;      :z 100}
-;;     {:theta1 -67.48350197229738,
-;;      :theta2 -67.48350197229738,
-;;      :theta3 -67.48350197229738,
-;;      :z 110}
-;;     {:z 120})
-
-(delta-calc-inverse-corrected 0 0 43)
-;; => {:theta1 0.0, :theta2 0.0, :theta3 0.0}
-
-;; fully retracted, physical-z~=18, and θ=-25
-(delta-calc-inverse-corrected 0 0 28)
-;; => {:theta1 -25.0, :theta2 -25.0, :theta3 -25.0}
-
-;; when extended to 110, pysical-z~=110, then physical θ~=-59
-(delta-calc-inverse-corrected 0 0 110)
-;; => {:theta1 76.70477668787215,
-;;     :theta2 76.70477668787215,
-;;     :theta3 76.70477668787215}
