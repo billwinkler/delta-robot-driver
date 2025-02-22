@@ -10,63 +10,8 @@
 (def ^:const tan30 (Math/tan (/ Math/PI 6)))
 (def ^:const deg-to-rad (/ Math/PI 180.0))
 (def ^:const rad-to-deg (/ 180.0 Math/PI))
-
-;; -------------------------------------------------
-;; Forward Kinematics
-;; -------------------------------------------------
-(defn delta-calc-forward
-  "Forward kinematics for a delta robot.
-   Given three joint angles (in degrees), computes the effector position as a map {:x, :y, :z}.
-   Returns nil if no valid solution exists."
-  [theta1 theta2 theta3]
-  (let [t1 (* theta1 deg-to-rad)
-        t2 (* theta2 deg-to-rad)
-        t3 (* theta3 deg-to-rad)
-        ;; Trigonometric constants
-        sin30 (Math/sin (/ Math/PI 6))
-        tan60 (Math/tan (/ Math/PI 3))
-        ;; Offset (common to each arm)
-        t (* (/ (- f e) 2.0) tan30)
-        ;; Calculate elbow joint positions for each arm:
-        ;; Arm 1:
-        y1 (- t (* rf (Math/cos t1)))
-        z1 (- (* rf (Math/sin t1)))
-        ;; Arm 2:
-        y2 (* (+ t (* rf (Math/cos t2))) sin30)
-        x2 (* y2 tan60)
-        z2 (- (* rf (Math/sin t2)))
-        ;; Arm 3:
-        x3 (- (* (+ t (* rf (Math/cos t3))) sin30))
-        y3 (* x3 tan60)
-        z3 (- (* rf (Math/sin t3)))
-        ;; Intermediate variables for sphere intersection:
-        dnm (- (* (- y2 y1) x3) (* (- y3 y1) x2))
-        w1 (+ (Math/pow y1 2) (Math/pow z1 2))
-        w2 (+ (Math/pow x2 2) (Math/pow y2 2) (Math/pow z2 2))
-        w3 (+ (Math/pow x3 2) (Math/pow y3 2) (Math/pow z3 2))
-        a1 (- (* (- z2 z1) (- y3 y1))
-              (* (- z3 z1) (- y2 y1)))
-        a2 (- (* (- z3 z1) x2)
-              (* (- z2 z1) x3))
-        b1 (- (/ (- (* (- w2 w1) (- y3 y1))
-                    (* (- w3 w1) (- y2 y1)))
-                  (* 2 dnm)))
-        b2 (/ (- (* (- w2 w1) x3)
-                 (* (- w3 w1) x2))
-              (* 2 dnm))
-        a (+ (Math/pow a1 2) (Math/pow a2 2) (Math/pow dnm 2))
-        b (* 2 (- (+ (* a1 b1) (* a2 b2))
-                  (* (Math/pow dnm 2) z1)))
-        c (+ (Math/pow b1 2) (Math/pow b2 2)
-             (* (Math/pow dnm 2)
-                (- (Math/pow z1 2) (Math/pow re 2))))
-        d (- (Math/pow b 2) (* 4 a c))]
-    (if (< d 0)
-      nil
-      (let [z0 (- (/ (+ b (Math/sqrt d)) (* 2 a)))
-            x0 (/ (+ (* a1 z0) b1) dnm)
-            y0 (/ (+ (* a2 z0) b2) dnm)]
-        {:x x0 :y y0 :z z0}))))
+(def ^:const tan60 (Math/tan (/ Math/PI 3)))
+(def ^:const z-offset 11.2)  ; same offset as used in delta-calc-inverse
 
 ;; -------------------------------------------------
 ;; Inverse Kinematics
@@ -133,29 +78,30 @@
 
 (def physical-model
   "A vector of maps representing the physical calibration model.
-   Each map has keys :z and :theta1 (measured joint angle in degrees)."
-  [{:z 28.637 :theta1 25}
-   {:z 30.490 :theta1 20}
-   {:z 32.825 :theta1 15}
-   {:z 35.699 :theta1 10}
-   {:z 39.158 :theta1 5}
-   {:z 43.220 :theta1 0}
-   {:z 47.873 :theta1 355}
-   {:z 53.064 :theta1 350}
-   {:z 58.707 :theta1 345}
-   {:z 64.692 :theta1 340}
-   {:z 70.898 :theta1 335}
-   {:z 77.202 :theta1 330}
-   {:z 83.485 :theta1 325}
-   {:z 89.639 :theta1 320}
-   {:z 95.566 :theta1 315}
-   {:z 101.181 :theta1 310}
-   {:z 111.191 :theta1 300}
-   {:z 115.469 :theta1 295}
-   {:z 119.201 :theta1 290}
-   {:z 122.352 :theta1 285}
-   {:z 124.897 :theta1 280}
-   {:z 126.817 :theta1 275}])
+   Each map has keys :z and :theta (measured joint angle in degrees).
+   All hip joints are set to the same angle theta"
+  [{:z 28.637 :theta 25}
+   {:z 30.490 :theta 20}
+   {:z 32.825 :theta 15}
+   {:z 35.699 :theta 10}
+   {:z 39.158 :theta 5}
+   {:z 43.220 :theta 0}
+   {:z 47.873 :theta 355}
+   {:z 53.064 :theta 350}
+   {:z 58.707 :theta 345}
+   {:z 64.692 :theta 340}
+   {:z 70.898 :theta 335}
+   {:z 77.202 :theta 330}
+   {:z 83.485 :theta 325}
+   {:z 89.639 :theta 320}
+   {:z 95.566 :theta 315}
+   {:z 101.181 :theta 310}
+   {:z 111.191 :theta 300}
+   {:z 115.469 :theta 295}
+   {:z 119.201 :theta 290}
+   {:z 122.352 :theta 285}
+   {:z 124.897 :theta 280}
+   {:z 126.817 :theta 275}])
 
 (defn make-calibration-data
   "Builds calibration data from the physical model.
@@ -163,10 +109,10 @@
    unwraps both the physical and computed theta values,
    and computes the error (physical - computed)."
   [physical-model]
-  (map (fn [{:keys [z theta1] :as m}]
+  (map (fn [{:keys [z theta] :as m}]
          (if-let [inv (delta-calc-inverse 0 0 z)]
            (let [computed (unwrap-angle (:theta1 inv))
-                 physical-unwrapped (unwrap-angle theta1)
+                 physical-unwrapped (unwrap-angle theta)
                  err (- physical-unwrapped computed)]
              {:z z
               :physical physical-unwrapped
@@ -202,7 +148,7 @@
 ;; -------------------------------------------------
 ;; Corrected Inverse Kinematics
 ;; -------------------------------------------------
-(defn delta-calc-inverse-corrected
+(defn calibrated-delta-calc-inverse
   "Computes inverse kinematics and applies a calibration correction.
    It calls delta-calc-inverse to get raw joint angles, unwraps them,
    then adds an interpolated error (based on the current z) to produce corrected angles.
@@ -219,24 +165,36 @@
        :theta3 corr-theta3})
     nil))
 
+
 ;; -------------------------------------------------
 ;; Example Usage (for testing, can be commented out)
 ;; -------------------------------------------------
 (comment
-  (println "Forward kinematics (10, 20, 30):" (delta-calc-forward 10 20 30))
   (println "Inverse kinematics (0, 0, 43):" (delta-calc-inverse 0 0 43))
-  (println "Corrected inverse kinematics (0, 0, 43):" (delta-calc-inverse-corrected 0 0 43))
+
+  (println "Corrected inverse kinematics (0, 0, 43):" (calibrated-delta-calc-inverse 0 0 43))
   (doseq [datum calibration-data]
     (println datum))
   (println "Interpolated error at z=50:" (interpolate-error 50))
 
-  (println "Corrected inverse kinematics (0, 0, 43):" ))
-;; => nil;; => nil
-  (delta-calc-inverse-corrected 0 0 43)
-;; => {:theta1 0.26276665896420326,
-;;     :theta2 0.26276665896420326,
-;;     :theta3 0.26276665896420326}
-(delta-calc-forward 0.26276665896420326 0.26276665896420326 0.26276665896420326)
-;; => {:x 0.027378343008122252,
-;;     :y -0.027378343008122252,
-;;     :z -80.22929699467375}
+  (for [z (range 25 130 10)]
+    (println [z (:theta1 (delta-calc-inverse 0 0 z))]))
+
+  (unwrap-angle -8)
+  )
+
+;; => ([30 9.403804171774706]
+;;     [40 -2.9257792577574144]
+;;     [50 -12.88434560184749]
+;;     [60 -21.83631338562363]
+;;     [70 -30.449319334131328]
+;;     [80 -39.19589468448646]
+;;     [90 -48.5846196331177]
+;;     [100 -59.48803024931988]
+;;     [110 -74.73589768335175]
+;;     [120 nil]
+;;     [130 nil])
+
+
+
+
