@@ -141,6 +141,40 @@
       nil
       {:theta1 theta1 :theta2 theta2 :theta3 theta3})))
 
+(def neutral-theta (:theta1 (delta-calc-inverse 0 0 43)))
+;; => roughly 0.2256
+
+(defn remove-neutral
+  "Then define a corrected angle function that subtracts that neutral offse"
+  [theta]
+  (- theta neutral-theta))
+
+;; At physical z corresponding to full retraction, my computed angle is about 22.2937°
+;; (after removal of neutral, that’s 22.2937 – 0.2256 ≈ 22.0681°) and I want –25°.
+;; This suggests a linear mapping:
+
+;;   physical-θ = A × (θ_raw − neutral-theta) + 0
+;;   and we want A × 22.0681 ≈ –25.
+(def A (/ -25 22.0681))  ; Approximately -1.133
+
+;; Then define a correction function
+(defn correct-theta [theta-raw]
+  (let [neutral-theta (:theta1 (delta-calc-inverse 0 0 43))
+        A (/ -25 (- (:theta1 (delta-calc-inverse 0 0 28)) neutral-theta))]
+    (+ (* A (- theta-raw neutral-theta)) 0)))  ; 0 here is the desired neutral physical angle.
+
+(defn delta-calc-inverse-corrected
+  "Inverse kinematics with corrected theta angles.
+   Given (x y z) in physical coordinates, returns a map with corrected
+   :theta1, :theta2, and :theta3 that are calibrated to your physical geometry."
+  [x y z]
+  (let [{theta1 :theta1 theta2 :theta2 theta3 :theta3 :as raw} (delta-calc-inverse x y z)]
+    (if (or (nil? theta1) (nil? theta2) (nil? theta3))
+      nil
+      {:theta1 (correct-theta theta1)
+       :theta2 (correct-theta theta2)
+       :theta3 (correct-theta theta3)})))
+
 
 (delta-calc-inverse 0 0 -79)
 ;; => {:theta1 23.954089748518864,
@@ -187,3 +221,16 @@
 ;;      :theta3 -67.48350197229738,
 ;;      :z 110}
 ;;     {:z 120})
+
+(delta-calc-inverse-corrected 0 0 43)
+;; => {:theta1 0.0, :theta2 0.0, :theta3 0.0}
+
+;; fully retracted, physical-z~=18, and θ=-25
+(delta-calc-inverse-corrected 0 0 28)
+;; => {:theta1 -25.0, :theta2 -25.0, :theta3 -25.0}
+
+;; when extended to 110, pysical-z~=110, then physical θ~=-59
+(delta-calc-inverse-corrected 0 0 110)
+;; => {:theta1 76.70477668787215,
+;;     :theta2 76.70477668787215,
+;;     :theta3 76.70477668787215}
