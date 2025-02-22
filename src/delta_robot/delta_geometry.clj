@@ -73,3 +73,117 @@
 
 ;; Example usage:
 ;; (delta-calc-forward 10 20 30)
+
+
+;; Define geometry constants once at the top of your namespace
+(def ^:const e 30.0)
+(def ^:const f 60.0)
+(def ^:const rf 50.0)
+(def ^:const re 80.0)
+(def ^:const tan30 (Math/tan (/ Math/PI 6)))
+
+(defn delta-calc-angle-yz
+  "Computes the joint angle (in degrees) for one arm given the
+   transformed coordinates (x0, y0, z0). Returns nil if no valid solution exists."
+  [x0 y0 z0]
+  (let [y1 (* -0.5 tan30 f)
+        ;; Adjust y coordinate relative to the end effector.
+        y0 (- y0 (* 0.5 tan30 e))
+        a (/ (+ (* x0 x0)
+                (* y0 y0)
+                (* z0 z0)
+                (* rf rf)
+                (- (* re re))
+                (- (* y1 y1)))
+             (* 2 z0))
+        b (/ (- y1 y0) z0)
+        d (- (* rf rf (+ 1 (* b b)))
+             (Math/pow (+ a (* b y1)) 2))]
+    (if (< d 0)
+      nil
+      (let [yj (/ (- y1 (* a b) (Math/sqrt d))
+                  (+ 1 (* b b)))
+            zj (+ a (* b yj))
+            theta (Math/atan2 (- zj) (- y1 yj))]
+        (* 180.0 (/ theta Math/PI))))))
+(defn delta-calc-inverse
+  "Inverse kinematics for a delta robot.
+   Given the end-effector position (x, y, z) in physical coordinates,
+   returns a map with keys :theta1, :theta2, and :theta3 (in degrees)
+   corresponding to the required joint angles.
+   Adjusts the z coordinate by an offset so that physical z=43.2 gives theta=0."
+  [x y z]
+  (let [;; The offset needed: our calculations assume z=54.4 for theta=0,
+        ;; but physically you have z=43.2. So we need to add 11.2.
+        z-offset 11.2
+        z-adjusted (+ z z-offset)
+        pi Math/PI
+        tan30 (Math/tan (/ pi 6))
+        ;; Robot geometry constants (must be consistent across your functions)
+        e 30.0
+        f 60.0
+        rf 50.0
+        re 80.0
+        ;; For arm 1 (no rotation)
+        theta1 (delta-calc-angle-yz x y z-adjusted)
+        ;; For arm 2, rotate coordinates by +120°
+        angle120 (/ (* 2 pi) 3)
+        cos120 (Math/cos angle120)
+        sin120 (Math/sin angle120)
+        x2 (+ (* x cos120) (* y sin120))
+        y2 (- (* y cos120) (* x sin120))
+        theta2 (delta-calc-angle-yz x2 y2 z-adjusted)
+        ;; For arm 3, rotate coordinates by -120°
+        x3 (+ (* x (Math/cos (- angle120))) (* y (Math/sin (- angle120))))
+        y3 (- (* y (Math/cos (- angle120))) (* x (Math/sin (- angle120))))
+        theta3 (delta-calc-angle-yz x3 y3 z-adjusted)]
+    (if (or (nil? theta1) (nil? theta2) (nil? theta3))
+      nil
+      {:theta1 theta1 :theta2 theta2 :theta3 theta3})))
+
+
+(delta-calc-inverse 0 0 -79)
+;; => {:theta1 23.954089748518864,
+;;     :theta2 23.954089748518864,
+;;     :theta3 23.954089748518864}
+ (delta-calc-forward 23.95 23.95 23.95)
+;; => {:x 0.03628612751807013,
+;;     :y -0.03628612751807013,
+;;     :z -100.29694701636205}
+
+(delta-calc-inverse 0 0 0)
+;; => java.lang.ArithmeticException: Divide by zero delta-robot.delta-geometry /Users/billwinkler/dev/delta-arm-v2/babashka/src/delta_robot/delta_geometry.clj:8:11
+
+;; for the physical arm geometry, when theta=0, z=43.2
+;; but the calculated inverse show theta=0 with z=54.4
+(delta-calc-inverse 0 0 54.396)
+;; => {:theta1 5.243397184967078E-4,
+;;     :theta2 5.243397184967078E-4,
+;;     :theta3 5.243397184967078E-4};; => nil
+(for [z (range 54.39 54.40 0.001)]
+  (assoc (delta-calc-inverse 0 0 z) :z z))
+
+;; neutral point
+(delta-calc-inverse 0 0 43)
+;; => {:theta1 0.2256033455493592,
+;;     :theta2 0.2256033455493592,
+;;     :theta3 0.2256033455493592}
+;; fully retracted, physical z~=18, and θ=-25
+(delta-calc-inverse 0 0 28)
+;; => {:theta1 22.293689663487974,
+;;     :theta2 22.293689663487974,
+;;     :theta3 22.293689663487974}
+;; fully extended, physical z~=127 and θ=85
+(delta-calc-inverse 0 0 127)
+;; => nil
+(for [z (range 100 130 10)]
+  (assoc (delta-calc-inverse 0 0 z) :z z))
+;; => ({:theta1 -54.42309842020025,
+;;      :theta2 -54.42309842020025,
+;;      :theta3 -54.42309842020025,
+;;      :z 100}
+;;     {:theta1 -67.48350197229738,
+;;      :theta2 -67.48350197229738,
+;;      :theta3 -67.48350197229738,
+;;      :z 110}
+;;     {:z 120})
