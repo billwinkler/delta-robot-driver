@@ -259,16 +259,111 @@
           err (- theta1 computed)]
       (println (assoc m :theta computed :err err)))
     (println "No valid inverse solution for z =" z)))
+(comment
+  ;; for example
+  (def calibration-data
+    "Calibration data with z, physical theta (as measured) and computed raw theta (unwrapped).
+   (Make sure to unwrap the computed angles so that e.g. 359.81 becomes -0.19.)"
+    [{:z 28.637 :physical 25    :computed 23.573175119603864} ; error = 1.42682
+     {:z 30.490 :physical 20    :computed 19.700520717524377} ; error = 0.29948
+     {:z 32.825 :physical 15    :computed 15.310069871706604} ; error = -0.31007
+     {:z 35.699 :physical 10    :computed 10.46848604463951} ; error = -0.46849
+     {:z 39.158 :physical 5     :computed 5.244475034732482} ; error = -0.24448
+     {:z 43.220 :physical 0     :computed -0.19132490956156} ; error = 0.19132
+     {:z 47.873 :physical -5    :computed -5.0493684244205} ; error = -5 - (-5.04937)= +0.04937? (adjust as needed)
+     {:z 53.064 :physical -10   :computed -8.0259203756297} ; error = -10 - (-8.02592)= -1.97408
+     {:z 58.707 :physical -15   :computed -17.088683689397} ; error = -15 - (-17.08868)= 2.08868? (check sign)
+     ;; … continue for all calibration points …
+     ]))
 
 
-(for [z (range 45 120 10)
-      :let [theta1 (:theta1 (delta-calc-inverse-corrected 0 0 z 0.7575))]]
-  [z theta1])
-;; => ([45 358.29256463148795]
-;;     [55 350.5554009055923]
-;;     [65 343.5752786483857]
-;;     [75 336.85407971763635]
-;;     [85 330.02415216324397]
-;;     [95 322.67407045663396]
-;;     [105 314.06490550791807]
-;;     [115 301.50510391441503])
+(defn unwrap-angle [theta]
+  "Converts theta from the 0–360° range into a range centered around 0.
+   For example, 355 becomes -5, 350 becomes -10, etc."
+  (if (> theta 180)
+    (- theta 360)
+    theta))
+
+(defn make-calibration-data
+  "Builds calibration data from the physical model.
+   For each entry, it computes the raw theta using delta-calc-inverse,
+   unwraps both the physical and computed theta values,
+   and then computes the error (physical - computed)."
+  [physical-model]
+  (map (fn [{:keys [z theta1] :as m}]
+         (if-let [inv (delta-calc-inverse 0 0 z)]
+           (let [computed (unwrap-angle (:theta1 inv))
+                 physical-unwrapped (unwrap-angle theta1)
+                 err (- physical-unwrapped computed)]
+             {:z z
+              :physical physical-unwrapped
+              :computed computed
+              :err err})
+           (assoc m :computed nil :err nil)))
+       physical-model))
+
+(def calibration-data (make-calibration-data physical-model))
+
+(doseq [datum (make-calibration-data physical-model)]
+  (println datum))
+
+(defn interpolate-error
+  "Linearly interpolates the error correction E for a given z using calibration-data.
+   Assumes calibration-data is a sequence of maps with keys :z and :err, sorted by :z.
+   Returns nil if z is outside the calibration range."
+  [z]
+  (let [data calibration-data]  ;; assume this is globally defined
+    (if (or (< z (:z (first data)))
+            (> z (:z (last data))))
+      nil
+      (loop [pairs (partition 2 1 data)]
+        (if (empty? pairs)
+          nil
+          (let [[p q] (first pairs)]
+            (if (and (<= (:z p) z) (>= (:z q) z))
+              (let [t (/ (- z (:z p))
+                         (- (:z q) (:z p)))
+                    err-p (:err p)
+                    err-q (:err q)]
+                (+ err-p (* t (- err-q err-p))))
+              (recur (rest pairs)))))))))
+
+(defn delta-calc-inverse-corrected
+  "Computes inverse kinematics and then applies a calibration correction.
+   It uses delta-calc-inverse (which returns raw computed angles in 0–360°)
+   and corrects them as follows:
+     1. Unwrap each raw angle to the –180…180° range.
+     2. Interpolate an error correction E at the given z value from calibration-data.
+     3. Add E to the unwrapped angle to obtain the corrected value.
+   Returns a map with keys :theta1, :theta2, :theta3 (in degrees), or nil if no inverse solution exists."
+  [x y z]
+  (if-let [{raw-theta1 :theta1 raw-theta2 :theta2 raw-theta3 :theta3}
+           (delta-calc-inverse x y z)]
+    (let [E (or (interpolate-error z) 0)
+          corr-theta1 (+ (unwrap-angle raw-theta1) E)
+          corr-theta2 (+ (unwrap-angle raw-theta2) E)
+          corr-theta3 (+ (unwrap-angle raw-theta3) E)]
+      {:theta1 corr-theta1
+       :theta2 corr-theta2
+       :theta3 corr-theta3})
+    nil))
+
+
+
+(doseq [{:keys [z physical computed]} 
+        (map (fn [{:keys [z physical computed]}]
+               {:z z :physical physical :computed computed
+                :err (when computed (- physical computed))})
+             calibration-data)]
+  (when computed
+    (println "z:" z "error:" (interpolate-error z))))
+
+
+(delta-calc-inverse-corrected 0 0 43)
+;; => {:theta1 0.2589968418002173,
+;;     :theta2 0.2589968418002173,
+;;     :theta3 0.2589968418002173}
+(delta-calc-inverse-corrected 0 0 101.181)
+;; => {:theta1 -50.0, :theta2 -50.0, :theta3 -50.0}
+(delta-calc-inverse-corrected 0 0 28.637)
+;; => {:theta1 25.0, :theta2 25.0, :theta3 25.0}
