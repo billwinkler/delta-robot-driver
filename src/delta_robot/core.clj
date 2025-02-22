@@ -1,76 +1,63 @@
 (ns delta-robot.core
   (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]))
-
-;; Read and update config (note how base/effector radii are computed from the edges)
-(def config
-  (-> (slurp "config.edn")
-      edn/read-string
-      (as-> cfg (assoc cfg :base-radius (/ (:base-edge cfg) (Math/sqrt 3)))
-        (assoc cfg :effector-radius (* (/ (Math/sqrt 3) 3) (:effector-edge cfg))))))
+            [clojure.java.io :as io]
+            [delta-robot.config :as cfg]
+            [delta-robot.delta-geometry :as geometry]))
 
 ;; We maintain current motor angles in an atom (in degrees)
 ;; Assume initial state is fully retracted
-(def current-angles (atom (vec (repeat 3 (:min-angle config)))))
-
+(def current-angles (atom (vec (repeat 3 (:min-angle cfg/config)))))
 
 ;; Convert an angular difference (in degrees) to motor pulses.
 (defn deg->pulses [deg]
-  (Math/round (* (/ deg 360.0) (:steps-per-rev config))))
+  (Math/round (* (/ deg 360.0) (:steps-per-rev cfg/config))))
 
-(defn clamp [x min-val max-val]
-  (max min-val (min x max-val)))
+(defn clamp [x]
+  (let [{:keys [min-angle max-angle]} cfg/config]
+    (max min-angle (min x max-angle))))
 
 (defn compute-step-commands
   "For a given target (x, y, z), compute a sequence of motor commands.
-   Returns a map with the commands and the new angles."
+   Returns a map with keys:
+     :commands  - a vector of command maps for each motor (each with :motor-number, :total-pulses, and :direction).
+     :new-angles - the target angles (after clamping) for each motor.
+   Uses the current-angles atom, clamp, and deg->pulses helper functions."
   [x y z]
   (println "DEBUG: Computing step commands for target:" [x y z])
   (println "DEBUG: Starting current-angles:" @current-angles)
-  (let [desired-angles (mapv #(delta-angle % x y z config) [0 1 2])
-        clamped-angles (mapv #(clamp % (:min-angle config) (:max-angle config))
-                             desired-angles)
-        angle-deltas (mapv - clamped-angles @current-angles)
-        commands (map-indexed (fn [i delta]
-                                (let [pulses    (Math/abs (deg->pulses delta))
-                                      direction (if (pos? delta) 0 1)]
-                                  (println "DEBUG: Motor" i "move:" delta "deg =>"
-                                           pulses "pulses, direction:" direction)
-                                  {:motor-number i
-                                   :total-pulses pulses
-                                   :direction direction}))
-                              angle-deltas)]
-    (println "DEBUG: Computed new angles:" clamped-angles)
-    {:commands commands
-     :new-angles clamped-angles}))
-
-;; Main function: given a target (x,y,z), compute pulses for each motor.
-(defn compute-steps
-  "Compute the number of pulses required for each motor to move the effector
-   from its current position to (x,y,z). Returns a vector of three pulse counts."
-  [x y z]
-  (let [desired-angles (mapv #(delta-angle % x y z config) [0 1 2])
-        ;; Enforce the physical limits for each motor's angle:
-        clamped-angles (mapv #(clamp % (:min-angle config) (:max-angle config))
-                             desired-angles)
-        ;; Calculate the difference between the clamped target angles and current angles.
-        angle-deltas (mapv - clamped-angles @current-angles)]
-    ;; Convert each angular difference to motor pulses.
-    (mapv deg->pulses angle-deltas)))
+  (let [angles (geometry/calibrated-delta-calc-inverse x y z)]
+    (if-not angles
+      (throw (Exception. "Target position unreachable"))
+      (let [{:keys [theta1 theta2 theta3]} angles
+            desired-angles [theta1 theta2 theta3]
+            clamped-angles (mapv clamp  desired-angles)
+            _  (println "DEBUG: desired-angles:" desired-angles)
+            _  (println "DEBUG: clamped-angles:" clamped-angles)
+            angle-deltas (mapv - clamped-angles @current-angles)
+            _  (println "DEBUG: angle-deltas:" angle-deltas)
+            commands (map-indexed
+                      (fn [i delta]
+                        (let [pulses (Math/abs (deg->pulses delta))
+                              direction (if (pos? delta) 1 0)]
+                          (println "DEBUG: Motor" i "move:" delta "deg =>" pulses "pulses, direction:" direction)
+                          {:motor-number i
+                           :total-pulses pulses
+                           :direction direction}))
+                      angle-deltas)]
+        (println "DEBUG: Computed new angles:" clamped-angles)
+        {:commands commands
+         :new-angles clamped-angles}))))
 
 (comment
-  (compute-steps 10 10 10)
-  (delta-angle 0 0 0 10 config)
-  ;; => 1.9850413434129677
-  (delta-angle 1 0 0 10 config)
-  ;; => 1.9850413434129677
-  (delta-angle 1 0 0 100 config)
-  (delta-angle 1 0 0 0.01 config)
-  (delta-angle 1 0 0 130 config)
-
-  (compute-steps 0 0 0.1)
-  ;; => [249 249 249]
-
+  (compute-step-commands 0 0 100)
+  (compute-step-commands 0 20 50)
   @current-angles
-
   )
+
+
+;; => {:commands
+;;     ({:motor-number 0, :total-pulses 516, :direction 0}
+;;      {:motor-number 1, :total-pulses 248, :direction 0}
+;;      {:motor-number 2, :total-pulses 248, :direction 0}),
+;;     :new-angles
+;;     [-30.093633290021916 0.0476944611717629 0.0476944611717629]}

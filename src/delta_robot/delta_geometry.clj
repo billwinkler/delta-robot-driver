@@ -1,20 +1,13 @@
 (ns delta-robot.delta-geometry
   "Kinematics and calibration for a delta robot.
    Provides functions for forward and inverse kinematics, as well as calibration correction based on physical measurements."
-(:require [clojure.edn :as edn]))
-
-;; Read and update config (note how base/effector radii are computed from the edges)
-(def config
-  (-> (slurp "config.edn")
-      edn/read-string
-      (as-> cfg (assoc cfg :base-radius (/ (:base-edge cfg) (Math/sqrt 3)))
-        (assoc cfg :effector-radius (* (/ (Math/sqrt 3) 3) (:effector-edge cfg))))))
+(:require [delta-robot.config :as cfg]))
 
 ;; Global geometry constants
-(def ^:const e (:effector-edge config))   ; end-effector equilateral triangle side
-(def ^:const f (:base-edge config))       ; base equilateral triangle side
-(def ^:const rf (:upper-arm-length config))  ; upper arm length
-(def ^:const re (:lower-arm-length config))  ; lower arm length
+(def ^:const e (:effector-edge cfg/config))   ; end-effector equilateral triangle side
+(def ^:const f (:base-edge cfg/config))       ; base equilateral triangle side
+(def ^:const rf (:upper-arm-length cfg/config))  ; upper arm length
+(def ^:const re (:lower-arm-length cfg/config))  ; lower arm length
 (def ^:const tan30 (Math/tan (/ Math/PI 6)))
 (def ^:const deg-to-rad (/ Math/PI 180.0))
 (def ^:const rad-to-deg (/ 180.0 Math/PI))
@@ -191,6 +184,9 @@
   (unwrap-angle -8)
   )
 
+(doseq [z (range 25 130 10)]
+    (println [z (:theta1 (calibrated-delta-calc-inverse 0 0 z))]))
+;; => (nil nil nil nil nil nil nil nil nil nil nil)
 ;; => ([30 9.403804171774706]
 ;;     [40 -2.9257792577574144]
 ;;     [50 -12.88434560184749]
