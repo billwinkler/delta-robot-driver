@@ -2,7 +2,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]))
 
-8;; Read and update config (note how base/effector radii are computed from the edges)
+;; Read and update config (note how base/effector radii are computed from the edges)
 (def config
   (-> (slurp "config.edn")
       edn/read-string
@@ -20,60 +20,6 @@
 
 (defn clamp [x min-val max-val]
   (max min-val (min x max-val)))
-
-;; Helper: compute the inverse kinematics for one arm.
-;; For a delta robot, each motor (arm) is offset by 0, 120, and -120 degrees.
-;; This function rotates the coordinate system accordingly, then computes the required angle.
-;; (Note: The inverse kinematics for a delta robot is nontrivial.
-;;  Here we outline one approach; you’ll need to verify the math and handle unreachable positions.)
-(defn delta-angle
-  "Compute the desired motor angle (in degrees) for the given arm (0,1,2)
-   given the target (x,y,z) and configuration parameters."
-  [arm-index x y z config]
-  (let [{:keys [base-edge effector-edge upper-arm-length lower-arm-length]} config
-        angle-offset (case arm-index
-                       0 0
-                       1 (Math/toRadians 120)
-                       2 (Math/toRadians -120))
-        x-rot (+ (* x (Math/cos angle-offset))
-                 (* y (Math/sin angle-offset)))
-        y-rot (- (* y (Math/cos angle-offset))
-                 (* x (Math/sin angle-offset)))
-        tan30 (/ 1 (Math/sqrt 3))
-        y1 (- 0 (* base-edge tan30))
-        y0 (- y-rot (* effector-edge tan30))
-        rf upper-arm-length
-        re lower-arm-length
-        a (/ (+ (* x-rot x-rot)
-                (* y0 y0)
-                (* z z)
-                (- (* rf rf))
-                (- (* re re))
-                (- (* y1 y1)))
-             (* 2 z))
-        b (/ (- y1 y0) z)
-        disc (- (* rf rf) (+ (* a a) (* b a a)))]
-    (if (< disc 0)
-      (do
-        (println "DEBUG: Target unreachable for arm" arm-index)
-        (println "  Target:" [x y z])
-        (println "  Current motor state (current-angles):" @current-angles)
-        (println "  Intermediate values:")
-        (println "    x-rot:" x-rot " y-rot:" y-rot)
-        (println "    y0:" y0 " y1:" y1)
-        (println "    rf:" rf " re:" re)
-        (println "    a:" a " b:" b " disc:" disc)
-        (throw (Exception. "Target position unreachable")))
-      (let [yj (/ (- y1 (* a b) (Math/sqrt disc))
-                  (+ 1 (* b b)))
-            zj (+ a (* b yj))
-            theta (Math/atan2 (- (- z)) (- y1 yj))
-            theta-deg (Math/toDegrees theta)]
-        (println "DEBUG: Successful computation for arm" arm-index)
-        (println "  Target:" [x y z])
-        (println "  Computed target angle (deg):" theta-deg)
-        (println "  Intermediate: yj:" yj " zj:" zj)
-        theta-deg))))
 
 (defn compute-step-commands
   "For a given target (x, y, z), compute a sequence of motor commands.
