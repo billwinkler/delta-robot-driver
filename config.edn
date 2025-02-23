@@ -1,9 +1,10 @@
-{:upper-arm-length 50 ;; arm attached to the motor
- :lower-arm-length 80 ;; arm attached to the effector
- :base-radius 60      ;; radius of the circle bounding the base triangle
- :effector-radius 30  ;; radius of the circle bounding the effector triangle.
- :max-angle 18        ;; fully retracted
- :min-angle -55       ;; fully extended
- :steps-per-rev 800  ;; stepper pulses per revolution
+{:upper-arm-length 130 ;; arm attached to the motor
+ :lower-arm-length 325 ;; arm attached to the effector
+ :base-radius 100      ;; radius of the circle bounding the base triangle
+ :effector-radius 40   ;; radius of the circle bounding the effector triangle.
+ :max-angle 275        ;; fully extended, measured clockwise from x-axis
+ :min-angle 25         ;; fully retracted
+ :gear-ratio 9         ;; stepper sproket 10mm to 90mm arm pulley
+ :steps-per-rev 800    ;; stepper pulses per revolution
  }
 
