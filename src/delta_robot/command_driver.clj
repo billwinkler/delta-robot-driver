@@ -46,9 +46,9 @@
 )
 
 (comment
-  (let [pulse0 6000
-        pulse1 5000
-        pulse2 4000
+  (let [pulse0 750
+        pulse1 750
+        pulse2 750
         up [{:motor-number 0 :total-pulses pulse0 :direction 0}
             {:motor-number 1 :total-pulses pulse1 :direction 0}
             {:motor-number 2 :total-pulses pulse2 :direction 0}]
@@ -57,7 +57,20 @@
             {:motor-number 2 :total-pulses pulse2 :direction 1}]]
     (dotimes [n 3]
       (do (send-commands up)
-          (send-commands dn))))
+          (Thread/sleep 1000)
+          (send-commands dn)
+          (Thread/sleep 1000))))
+
+  (let [pulse0 3000
+        pulse1 3000
+        pulse2 3000
+        up [{:motor-number 0 :total-pulses pulse0 :direction 0}
+            {:motor-number 1 :total-pulses pulse1 :direction 0}
+            {:motor-number 2 :total-pulses pulse2 :direction 0}]
+        dn [{:motor-number 0 :total-pulses pulse0 :direction 1}
+            {:motor-number 1 :total-pulses pulse1 :direction 1}
+            {:motor-number 2 :total-pulses pulse2 :direction 1}]]
+    (send-commands dn))
 
   (let [pulse0 6000
         pulse1 5000
@@ -66,6 +79,28 @@
             {:motor-number 1 :total-pulses pulse1 :direction 1}
             {:motor-number 2 :total-pulses pulse2 :direction 1}]]
     (send-commands dn))
+
+  (let [pulse0 25
+        pulse1 25
+        pulse2 25
+        up [{:motor-number 0 :total-pulses pulse0 :direction 0}
+            {:motor-number 1 :total-pulses pulse1 :direction 0}
+            {:motor-number 2 :total-pulses pulse2 :direction 0}]]
+    (doseq [n (range 1)]
+      (send-commands up)
+      (Thread/sleep 1)))
+
+  (let [pulse0 3000
+        pulse1 3000
+        pulse2 3000
+        up [{:motor-number 0 :total-pulses pulse0 :direction 0}
+            {:motor-number 1 :total-pulses pulse1 :direction 0}
+            {:motor-number 2 :total-pulses pulse2 :direction 0}]]
+    (doseq [n (range 1)]
+      (send-commands up)
+      (Thread/sleep 1)))
+
+  
 
   )
 ;; => nil

@@ -10,6 +10,7 @@
 
 ;; Convert an angular difference (in degrees) to motor pulses.
 (defn deg->pulses [deg]
+  (println "DEBUG: Computing deg->pulses, deg:" deg "pulses"(Math/round (* (/ deg 360.0) (:steps-per-rev cfg/config))))
   (Math/round (* (/ deg 360.0) (:steps-per-rev cfg/config))))
 
 (defn clamp [x]

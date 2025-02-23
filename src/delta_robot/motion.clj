@@ -44,8 +44,21 @@
 
 (def moves
   "A sequence of target coordinates (x y z) for the effector."
-  [[50 50 50]
-   [0 0 50]])
+  [[0 0 40]
+   [50 0 40]
+   [-50 0 40]
+   [-50 50 40]
+   [50 50 40]
+   [50 -50 40]
+   [-50 -50 40]
+
+   [0 0 40]
+   [50 0 40]
+   [-50 0 40]
+   [-50 50 40]
+   [50 50 40]
+   [50 -50 40]
+   [-50 -50 40]])
 
 (defn move-path [moves]
   "Iterate over a sequence of target positions, sending the corresponding motor commands and updating the state."
@@ -56,7 +69,8 @@
       ;; Update state after movement completes.
       (reset! current-angles new-angles)
       ;; Optionally pause before the next move.
-      (Thread/sleep 1000))))
+;;      (Thread/sleep 1000)
+      )))
 
 (move-path moves)
-;; => java.lang.Exception: Target position unreachable delta-robot.motion /Users/billwinkler/dev/delta-arm-v2/babashka/src/delta_robot/core.clj:37:7
+
