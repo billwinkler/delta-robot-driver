@@ -1,8 +1,6 @@
 (ns delta-robot.core
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [delta-robot.config :as cfg]
-            [delta-robot.delta-geometry :as geometry]))
+  (:require [delta-robot.config :as cfg]
+            [delta-robot.inverse-kinematics :as ik]))
 
 ;; We maintain current motor angles in an atom (in degrees)
 ;; Assume initial state is fully retracted
@@ -10,8 +8,8 @@
 
 ;; Convert an angular difference (in degrees) to motor pulses.
 (defn deg->pulses [deg]
-  (println "DEBUG: Computing deg->pulses, deg:" deg "pulses"(Math/round (* (/ deg 360.0) (:steps-per-rev cfg/config))))
-  (Math/round (* (/ deg 360.0) (:steps-per-rev cfg/config))))
+  (let [{:keys [steps-per-rev gear-ratio]} cfg/config]
+    (Math/round (* (/ deg 360.0) steps-per-rev gear-ratio))))
 
 (defn clamp [x]
   (let [{:keys [min-angle max-angle]} cfg/config]
@@ -26,7 +24,7 @@
   [x y z]
   (println "DEBUG: Computing step commands for target:" [x y z])
   (println "DEBUG: Starting current-angles:" @current-angles)
-  (let [angles (geometry/calibrated-delta-calc-inverse x y z)]
+  (let [angles (ik/delta-calc-inverse x y z)]
     (if-not angles
       (throw (Exception. "Target position unreachable"))
       (let [{:keys [theta1 theta2 theta3]} angles
@@ -39,26 +37,25 @@
             commands (map-indexed
                       (fn [i delta]
                         (let [pulses (Math/abs (deg->pulses delta))
-                              direction (if (pos? delta) 1 0)]
+                              direction (if (pos? delta) 0 1)]
                           (println "DEBUG: Motor" i "move:" delta "deg =>" pulses "pulses, direction:" direction)
                           {:motor-number i
                            :total-pulses pulses
                            :direction direction}))
                       angle-deltas)]
         (println "DEBUG: Computed new angles:" clamped-angles)
-        {:commands commands
-         :new-angles clamped-angles}))))
+        (println "DEBUG: Commands:" commands)
+        {:commands commands :new-angles clamped-angles}))))
 
 (comment
-  (compute-step-commands 0 0 100)
-  (compute-step-commands 0 20 50)
+  (ik/delta-calc-inverse 0 0 200)
+  (ik/delta-calc-inverse 0 0 400)
+  (ik/delta-calc-inverse 0 100 400)
+
+  (deg->pulses 14)
+  
+  (compute-step-commands 0 0 200)
+  (compute-step-commands 0 100 400)
   @current-angles
   )
 
-
-;; => {:commands
-;;     ({:motor-number 0, :total-pulses 516, :direction 0}
-;;      {:motor-number 1, :total-pulses 248, :direction 0}
-;;      {:motor-number 2, :total-pulses 248, :direction 0}),
-;;     :new-angles
-;;     [-30.093633290021916 0.0476944611717629 0.0476944611717629]}

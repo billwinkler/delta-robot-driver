@@ -3,10 +3,13 @@
             [delta-robot.config :as cfg]
             [delta-robot.core :refer [compute-step-commands clamp deg->pulses current-angles]]))
 
+(defn reset []
+  (reset! current-angles (vec (repeat 3 (:min-angle cfg/config)))))
+
 (defn home []
   (let [{:keys [min-angle max-angle]} cfg/config
         ;; Calculate the angular difference (should be negative)
-        delta (- min-angle max-angle)  ; -73° in this case
+        delta (- min-angle max-angle)   ; -73° in this case
         _ (println "delta" delta)
         ;; Compute the absolute number of pulses required:
         pulses (Math/abs (deg->pulses delta))
@@ -20,45 +23,19 @@
     ;; Allow some time for the motors to move and for the limit switches to halt them
     (Thread/sleep 2000)
     ;; Reset the current angles to the fully retracted value
-    (reset! current-angles (vec (repeat 3 max-angle)))
+    (reset! current-angles (vec (repeat 3 min-angle)))
     (println "Homing complete. Current angles:" @current-angles)))
-
-(comment 
-  (defn compute-step-commands
-    "For a given target (x, y, z), compute a sequence of motor commands.
-   Returns a map with the commands and the new angles."
-    [x y z]
-    (let [desired-angles (mapv #(delta-angle % x y z config) [0 1 2])
-          clamped-angles (mapv #(clamp % (:min-angle config) (:max-angle config))
-                               desired-angles)
-          angle-deltas (mapv - clamped-angles @current-angles)
-          commands (map-indexed (fn [i delta]
-                                  (let [pulses    (Math/abs (deg->pulses delta))
-                                        direction (if (pos? delta) 0 1)]
-                                    {:motor-number i
-                                     :total-pulses pulses
-                                     :direction direction}))
-                                angle-deltas)]
-      {:commands commands
-       :new-angles clamped-angles})))
 
 (def moves
   "A sequence of target coordinates (x y z) for the effector."
-  [[0 0 40]
-   [50 0 40]
-   [-50 0 40]
-   [-50 50 40]
-   [50 50 40]
-   [50 -50 40]
-   [-50 -50 40]
-
-   [0 0 40]
-   [50 0 40]
-   [-50 0 40]
-   [-50 50 40]
-   [50 50 40]
-   [50 -50 40]
-   [-50 -50 40]])
+  [[0 0 400]
+   [80 0 400]
+   [-80 0 400]
+   [-80 80 400]
+   [80 80 400]
+   [80 -80 400]
+   [-80 -80 400]
+   [0 0 200]])
 
 (defn move-path [moves]
   "Iterate over a sequence of target positions, sending the corresponding motor commands and updating the state."
@@ -72,5 +49,16 @@
 ;;      (Thread/sleep 1000)
       )))
 
-(move-path moves)
+(comment
+  (reset)
+  (let [[x y z] [100 100 300]
+        {:keys [commands new-angles]} (compute-step-commands x y z)]
+      (println "Sending commands:" commands)
+      (send-commands commands)
+      ;; Update state after movement completes.
+      (reset! current-angles new-angles)
+      )
+  (compute-step-commands 0 0 400)
+  (move-path moves)
+)
 

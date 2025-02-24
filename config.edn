@@ -2,9 +2,9 @@
  :lower-arm-length 325 ;; arm attached to the effector
  :base-radius 100      ;; radius of the circle bounding the base triangle
  :effector-radius 40   ;; radius of the circle bounding the effector triangle.
- :max-angle 275        ;; fully extended, measured clockwise from x-axis
+ :max-angle 355        ;; measured clockwise from x-axis
  :min-angle 25         ;; fully retracted
- :gear-ratio 9         ;; stepper sproket 10mm to 90mm arm pulley
+ :gear-ratio 2         ;; stepper sproket 10mm to 90mm arm pulley
  :steps-per-rev 800    ;; stepper pulses per revolution
  }
 

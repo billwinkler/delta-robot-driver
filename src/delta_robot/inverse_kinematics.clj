@@ -79,20 +79,25 @@
 (defn compute-theta [alpha]
   (let [alpha-deg (* alpha rad-to-deg)
         theta-deg (- 360.0 alpha-deg)]
-    (mod theta-deg 360.0)))
+    (mod alpha-deg 360.0)))
+
+;; Unwrap angles greater than 180, to become negative degrees from x-axis
+(defn unwrap [angle]
+  (if (< angle 180) (- angle) (- 360 angle)))
+
 
 ;; Compute theta angles for all three arms
 (defn delta-calc-inverse [x y z]
   (let [alphas (map (fn [phi] (newtons-method phi x y z)) phi-angles)]
     (if (some nil? alphas)
-      nil ; return nil if any arm fails to converge
-      (let [thetas (map compute-theta alphas)]
+      nil                    ; return nil if any arm fails to converge
+      (let [thetas (map (comp unwrap compute-theta) alphas)]
         {:theta1 (first thetas)
          :theta2 (second thetas)
          :theta3 (nth thetas 2)}))))
 
 (defn example []
-  (let [positions [[0.0 0.0 215] [0.0 0.0 450]]
+  (let [positions [[0.0 0.0 217] [0.0 0.0 450]]
         results (map (fn [[x y z]] (delta-calc-inverse x y z)) positions)]
     (doseq [[pos angles] (zipmap positions results)]
       (println "Position" pos "->" angles))))
@@ -102,7 +107,7 @@
 (comment
   ;; Run example
   (example)
-  
+
   (let [physical-model [{:z 217.098 :theta 25}
                         {:z 224.689 :theta 20}
                         {:z 233.166  :theta 15}
@@ -126,4 +131,4 @@
                         {:z 442.360 :theta 280}
                         {:z 446.581 :theta 275}]]
     (doseq [{:keys [z theta]} physical-model]
-      (println "z:" z "expected;" theta "computed:" (:theta1 (delta-calc-inverse 0 0 z))))))
+      (println "z:" z "expected;" ((comp - unwrap) theta) "computed:" (:theta1 (delta-calc-inverse 0 0 z))))))
