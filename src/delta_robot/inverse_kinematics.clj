@@ -96,18 +96,16 @@
          :theta2 (second thetas)
          :theta3 (nth thetas 2)}))))
 
-(defn example []
-  (let [positions [[0.0 0.0 217] [0.0 0.0 450]]
-        results (map (fn [[x y z]] (delta-calc-inverse x y z)) positions)]
-    (doseq [[pos angles] (zipmap positions results)]
-      (println "Position" pos "->" angles))))
-
-
 
 (comment
-  ;; Run example
-  (example)
+  ;; these are measurements taken from the physical robot
+  (let [in->mm #(* % 25.4)
+        physical [{:retracted {:theta 28 :z (in->mm 8)}
+                   :extended {:theta -90 :z (in->mm 17.32)}
+                   :horizontal {:theta 0 :z (in->mm 10.625)}}]]
+    physical)
 
+  ;; these are measurement taken from Fusion 360 model
   (let [physical-model [{:z 217.098 :theta 25}
                         {:z 224.689 :theta 20}
                         {:z 233.166  :theta 15}
@@ -131,4 +129,5 @@
                         {:z 442.360 :theta 280}
                         {:z 446.581 :theta 275}]]
     (doseq [{:keys [z theta]} physical-model]
-      (println "z:" z "expected;" ((comp - unwrap) theta) "computed:" (:theta1 (delta-calc-inverse 0 0 z))))))
+      (println "z:" z "expected;" ((comp - unwrap) theta)
+               "computed:" (Math/round (:theta1 (delta-calc-inverse 0 0 z)))))))

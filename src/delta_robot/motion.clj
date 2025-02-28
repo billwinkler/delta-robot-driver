@@ -4,12 +4,12 @@
             [delta-robot.core :refer [compute-step-commands clamp deg->pulses current-angles]]))
 
 (defn reset []
-  (reset! current-angles (vec (repeat 3 (:min-angle cfg/config)))))
+  (reset! current-angles (vec (repeat 3 (:max-angle cfg/config)))))
 
 (defn home []
   (let [{:keys [min-angle max-angle]} cfg/config
         ;; Calculate the angular difference (should be negative)
-        delta (- min-angle max-angle)   ; -73° in this case
+        delta (- min-angle max-angle)   
         _ (println "delta" delta)
         ;; Compute the absolute number of pulses required:
         pulses (Math/abs (deg->pulses delta))
@@ -23,19 +23,19 @@
     ;; Allow some time for the motors to move and for the limit switches to halt them
     (Thread/sleep 2000)
     ;; Reset the current angles to the fully retracted value
-    (reset! current-angles (vec (repeat 3 min-angle)))
+    (reset! current-angles (vec (repeat 3 max-angle)))
     (println "Homing complete. Current angles:" @current-angles)))
 
 (def moves
   "A sequence of target coordinates (x y z) for the effector."
-  [[0 0 400]
-   [80 0 400]
-   [-80 0 400]
-   [-80 80 400]
-   [80 80 400]
-   [80 -80 400]
-   [-80 -80 400]
-   [0 0 200]])
+  [[0 0 275]
+   [50 50 275]
+   [-50 50 275]
+   [-50 -50 275]
+   [50 -50 275]
+   [50 50 275]
+   [0 0 275]
+   [0 0 217]])
 
 (defn move-path [moves]
   "Iterate over a sequence of target positions, sending the corresponding motor commands and updating the state."
@@ -46,7 +46,7 @@
       ;; Update state after movement completes.
       (reset! current-angles new-angles)
       ;; Optionally pause before the next move.
-;;      (Thread/sleep 1000)
+;;      (Thread/sleep 500)
       )))
 
 (comment
@@ -59,6 +59,10 @@
       (reset! current-angles new-angles)
       )
   (compute-step-commands 0 0 400)
-  (move-path moves)
+  (dotimes [n 3]
+    (move-path moves))
+  
+  (move-path [[0 0 400]])
+  (home)
 )
 

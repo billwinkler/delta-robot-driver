@@ -4,12 +4,12 @@
 
 ;; We maintain current motor angles in an atom (in degrees)
 ;; Assume initial state is fully retracted
-(def current-angles (atom (vec (repeat 3 (:min-angle cfg/config)))))
+(def current-angles (atom (vec (repeat 3 (:max-angle cfg/config)))))
 
 ;; Convert an angular difference (in degrees) to motor pulses.
 (defn deg->pulses [deg]
   (let [{:keys [steps-per-rev gear-ratio]} cfg/config]
-    (Math/round (* (/ deg 360.0) steps-per-rev gear-ratio))))
+    (Math/round (* deg (/ steps-per-rev 360.0) gear-ratio))))
 
 (defn clamp [x]
   (let [{:keys [min-angle max-angle]} cfg/config]
@@ -37,7 +37,7 @@
             commands (map-indexed
                       (fn [i delta]
                         (let [pulses (Math/abs (deg->pulses delta))
-                              direction (if (pos? delta) 0 1)]
+                              direction (if (pos? delta) 1 0)]
                           (println "DEBUG: Motor" i "move:" delta "deg =>" pulses "pulses, direction:" direction)
                           {:motor-number i
                            :total-pulses pulses
@@ -52,7 +52,7 @@
   (ik/delta-calc-inverse 0 0 400)
   (ik/delta-calc-inverse 0 100 400)
 
-  (deg->pulses 14)
+  (deg->pulses 360)
   
   (compute-step-commands 0 0 200)
   (compute-step-commands 0 100 400)
