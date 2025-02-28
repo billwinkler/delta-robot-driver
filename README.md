@@ -41,7 +41,7 @@ This project is a Clojure-based control system for a delta robot. It leverages i
   ```
 - Set up kernel module permissions by granting non-root users access to `/dev/delta_robot`.
   ``` shell
-  sudo chmod 666 /dev/delta_robo
+  sudo chmod 666 /dev/delta_robot
   ```
 - Create a udev rule so the permission change is applied automatically on boot.  Add this line `KERNEL=="delta_robot", MODE="0666"`. And then reload the rules.
   ``` shell
