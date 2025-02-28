@@ -15,6 +15,7 @@ This project is a Clojure-based control system for a delta robot. It leverages i
 - **Babashka** (for process management)
 - A **Raspberry Pi** with the necessary hardware setup for the delta robot
 - SSH access to the Raspberry Pi
+- [raspi-stepper-module](https://github.com/billwinkler/raspi-stepper-module): Kernel Module for controlling stepper motors on Raspberry Pi
 
 ## Installation
 
@@ -30,7 +31,6 @@ This project is a Clojure-based control system for a delta robot. It leverages i
   ```bash
   curl -s https://raw.githubusercontent.com/babashka/babashka/master/install | bash
   ```
-- [raspi-stepper-module](https://github.com/billwinkler/raspi-stepper-module): Kernel Module for controlling stepper motors on Raspberry Pi
 3. **Set up the Raspberry Pi:**
 - Verify the Raspberry Pi is accessible via SSH.
 - Update the `raspberry-pi-host` variable in `src/delta_robot/command_driver.clj` to your Raspberry Pi's hostname or IP address (default is `"raspberrypi.local"`).
@@ -38,6 +38,15 @@ This project is a Clojure-based control system for a delta robot. It leverages i
   ``` shell
   cd raspi-stepper-module
   sudo insmod delta-robot.ko
+  ```
+- Set up kernel module permissions by granting non-root users access to `/dev/delta_robot`.
+  ``` shell
+  sudo chmod 666 /dev/delta_robo
+  ```
+- Create a udev rule so the permission change is applied automatically on boot.  Add this line `KERNEL=="delta_robot", MODE="0666"`. And then reload the rules.
+  ``` shell
+  sudo nano /etc/udev/rules.d/99-delta-robot.rules
+  sudo udevadm control --reload-rules && sudo udevadm trigger
   ```
 
 4. **Configure the robot:**
