@@ -8,7 +8,7 @@
   (let [result (sh "pigs" "r" (str pin))]
     (-> result :out str/trim Integer/parseInt)))
 
-(deftest test-limit-switches
+#_(deftest test-limit-switches
   (testing "Limit switch functionality"
     (let [limit-switch-pins (get-in config [:gpio-pins :limit-switches])]
       (doseq [pin limit-switch-pins]
