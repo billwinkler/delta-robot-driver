@@ -2,13 +2,11 @@
   (:require [babashka.process :refer [sh]]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.walk :refer [postwalk]] ; Added for JSON encoding
             [delta-robot.config :refer [config]]))
 
 (def min-phase-pulses 10)
-(def time-scale-precision 10000)
-
-(def pulse-on-duration-us 10) ; New constant: Duration for step pin to be HIGH in microseconds
+(def time-scale-precision 10000) ; A constant (set to 10000) that acts as a multiplier to maintain precision during floating-point time calculations, especially when scaling pulse periods to synchronize motor movements.
+(def pulse-on-duration-us 10) ; Duration for step pin to be HIGH in microseconds
 
 (defn- estimate-motion-duration [total-pulses accel-pulses decel-pulses]
   (let [min-period (long (/ 1e9 (:max-frequency config)))
@@ -80,13 +78,16 @@
                          time-scale-precision)
             current-time-us (atom 0)]
         (doseq [period-ns (:periods-ns wd)]
-          (let [scaled-period-us (long (/ (* period-ns time-scale) time-scale-precision 1000))] ; Convert to us
+          (let [scaled-period-us (long (/ (* period-ns time-scale) time-scale-precision 1000)) ; Convert to us
+                ;; Ensure scaled_period_us is at least pulse-on-duration-us + 1 (for minimal OFF time)
+                min-valid-period-us (+ pulse-on-duration-us 1)
+                adjusted-scaled-period-us (max scaled-period-us min-valid-period-us)]
             ;; Add event to turn step pin ON
             (swap! event-queue update-in [@current-time-us :on-gpios] (fnil conj #{}) gpio-step)
             ;; Add event to turn step pin OFF after pulse-on-duration-us
             (swap! event-queue update-in [@current-time-us (+ @current-time-us pulse-on-duration-us) :off-gpios] (fnil conj #{}) gpio-step)
             ;; Advance time for the start of the next pulse (total period)
-            (swap! current-time-us + scaled-period-us)))))
+            (swap! current-time-us + adjusted-scaled-period-us))))) ; Use adjusted period here
     @event-queue))
 
 (defn- generate-wvag-segments [event-queue wave-data-per-motor]
@@ -123,7 +124,7 @@
 
         ;; Advance the current time to the time of the current event
         (reset! current-time-us event-time)))
-    
+
     ;; Filters out any `0 0 0` segments. These segments would represent a zero-delay, no-change operation,
     ;; which `pigpio` does not require and can sometimes lead to issues if not explicitly handled or removed.
     (filter (fn [s] (not= "0 0 0" s)) @final-wvag-segments)))
@@ -132,11 +133,36 @@
   "Executes the pigpio waveform commands (wvag, wvcre, wvtx) and handles errors."
   (if (empty? wvag-segments)
     (println "No waveform segments generated. Nothing to send.")
-    (let [wvag-command-args (mapcat (fn [s] (str/split s #"\s+")) wvag-segments)]
-      (apply sh (into ["pigs" "wvag"] wvag-command-args))
-      (let [wave-id (-> (sh "pigs" "wvcre") :out str/trim Integer/parseInt)]
+    (let [wvag-command-args (mapcat (fn [s] (str/split s #"\s+")) wvag-segments)
+          batch-size 150 ; Number of arguments per pigs wvag call (50 segments * 3 args/segment)
+          batches (partition-all batch-size wvag-command-args)]
+
+      ;; --- DEBUGGING START ---
+      (println (str "DEBUG: Total number of wvag segments: " (count wvag-segments)))
+      (println (str "DEBUG: Total pigs wvag arguments: " (count wvag-command-args)))
+      (println (str "DEBUG: Number of wvag batches: " (count batches)))
+      ;; (println "DEBUG: wvag command args (first 30):" (take 30 wvag-command-args)) ; Print first few args
+      ;; (println "DEBUG: wvag command args (last 30):" (take-last 30 wvag-command-args)) ; Print last few args
+      ;; (println "DEBUG: wvag segments:" wvag-segments) ; Uncomment to see all segments if needed
+      ;; --- DEBUGGING END ---
+
+      (doseq [batch batches]
+        (let [result (apply sh (into ["pigs" "wvag"] batch))]
+          (when-not (zero? (:exit result))
+            (println "ERROR: pigs wvag batch failed:")
+            (println "STDOUT:" (:out result))
+            (println "STDERR:" (:err result))
+            (throw (Exception. (str "Failed to add waveform segments. pigpio error: " (:err result)))))))
+
+      (let [wvcre-result (sh "pigs" "wvcre") ; Capture the full result
+            wave-id (-> wvcre-result :out str/trim Integer/parseInt)]
+        ;; --- DEBUGGING START ---
+        (println "DEBUG: pigs wvcre raw output:" (:out wvcre-result))
+        (println "DEBUG: pigs wvcre stderr:" (:err wvcre-result))
+        (println "DEBUG: wave-id parsed:" wave-id)
+        ;; --- DEBUGGING END ---
         (if (neg? wave-id)
-          (throw (Exception. "Failed to create waveform")) ; Error during waveform creation
+          (throw (Exception. (str "Failed to create waveform. pigpio error: " (:err wvcre-result)))) ; Include pigpio error in exception
           (let [result (sh "pigs" "wvtx" (str wave-id))]
             (if (zero? (:exit result))
               (println "Command sent successfully!")
@@ -144,8 +170,8 @@
                 (println "Failed to send command:" (:err result))
                 (println "STDOUT:" (:out result))))))))))
 
-
 (defn send-commands [commands]
+  (println "commands:" commands)
   (let [wave-data-per-motor (map (fn [cmd] (generate-waveform-data (:motor-number cmd) cmd)) commands)
         max-duration (apply max (map :duration wave-data-per-motor))
         event-queue (populate-gpio-event-queue wave-data-per-motor max-duration)
@@ -156,7 +182,7 @@
   
 (defn send-debug-pulses [motor-id direction]
   "Sends 100 pulses to the specified motor in the given direction for debugging."
-  (println (str "Sending 100 pulses to motor " motor-id " in direction " direction))
+  (println (str "Sending pulses to motor " motor-id " in direction " direction))
   (send-commands [{:motor-number motor-id
-                   :total-pulses 10
+                   :total-pulses 100
                    :direction direction}]))
