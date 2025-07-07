@@ -7,9 +7,12 @@
   (reset! current-angles (vec (repeat 3 (:max-angle cfg/config)))))
 
 (defn home []
+  (println "WARNING: Homing the robot without limit switches can be dangerous.")
+  (println "The original kernel module handled this, but the new pigpiod-based driver does not.")
+  (println "Ensure the robot has physical stops to prevent damage.")
   (let [{:keys [min-angle max-angle]} cfg/config
         ;; Calculate the angular difference (should be negative)
-        delta (- min-angle max-angle)   
+        delta (- min-angle max-angle)
         _ (println "delta" delta)
         ;; Compute the absolute number of pulses required:
         pulses (Math/abs (deg->pulses delta))

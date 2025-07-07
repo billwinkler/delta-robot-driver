@@ -6,20 +6,18 @@ This project is a Clojure-based control system for a delta robot. It leverages i
 
 - **Inverse Kinematics**: Computes motor angles required to reach specific (x, y, z) positions.
 - **Motion Control**: Homes the robot to its fully retracted position and moves it along predefined paths.
-- **Command Serialization**: Serializes motor commands and transmits them to the robot's hardware.
+- **Command Generation**: Generates synchronized pulse waveforms for stepper motors and executes them on a Raspberry Pi using `pigpiod`.
 - **Configuration Management**: Allows easy adjustment of robot parameters via an EDN file.
 
 ## Requirements
 
 - **Clojure** 1.10 or higher
 - **Babashka** (for process management)
-- A **Raspberry Pi** with the necessary hardware setup for the delta robot
-- SSH access to the Raspberry Pi
-- [raspi-stepper-module](https://github.com/billwinkler/raspi-stepper-module): Kernel Module for controlling stepper motors on Raspberry Pi
+- A **Raspberry Pi** with `pigpiod` installed and running.
 
 ## Installation
 
-1. **Clone the repository**:
+1. **Clone the repository onto your Raspberry Pi**:
    ```bash
    git clone https://github.com/yourusername/delta-robot-control.git
    cd delta-robot-control
@@ -32,25 +30,19 @@ This project is a Clojure-based control system for a delta robot. It leverages i
   curl -s https://raw.githubusercontent.com/babashka/babashka/master/install | bash
   ```
 3. **Set up the Raspberry Pi:**
-- Verify the Raspberry Pi is accessible via SSH.
-- Update the `raspberry-pi-host` variable in `src/delta_robot/command_driver.clj` to your Raspberry Pi's hostname or IP address (default is `"raspberrypi.local"`).
-- Load the stepper driver module
-  ``` shell
-  cd raspi-stepper-module
-  sudo insmod delta-robot.ko
+- Install `pigpiod`:
+  ```bash
+  sudo apt-get update
+  sudo apt-get install pigpio
   ```
-- Set up kernel module permissions by granting non-root users access to `/dev/delta_robot`.
-  ``` shell
-  sudo chmod 666 /dev/delta_robot
-  ```
-- Create a udev rule so the permission change is applied automatically on boot.  Add this line `KERNEL=="delta_robot", MODE="0666"`. And then reload the rules.
-  ``` shell
-  sudo nano /etc/udev/rules.d/99-delta-robot.rules
-  sudo udevadm control --reload-rules && sudo udevadm trigger
+- Enable and start the `pigpiod` daemon:
+  ```bash
+  sudo systemctl enable pigpiod
+  sudo systemctl start pigpiod
   ```
 
 4. **Configure the robot:**
-- Modify `config.edn` to match your delta robot's physical parameters (see Configuration for details).
+- Modify `config.edn` to match your delta robot's physical parameters and GPIO pin assignments.
 
 ## Usage
 ### Homing the Robot
@@ -60,8 +52,7 @@ To home the robot (move it to its fully retracted position), use the `home` func
 (require '[delta-robot.motion :as motion])
 (motion/home)
 ```
-
-**Note:** The homing process includes a 2-second delay (`Thread/sleep 2000`) to allow the motors to complete their movement. Adjust this timing in `src/delta_robot/motion.clj` if your hardware requires a different duration.
+**WARNING:** The `home` function does not use limit switches. Ensure your robot has physical stops to prevent damage during the homing sequence.
 
 ### Moving to a Specific Position
 To move the robot to a specific (x, y, z) position, compute the required motor commands and send them to the hardware.
@@ -74,8 +65,6 @@ To move the robot to a specific (x, y, z) position, compute the required motor c
     (driver/send-commands commands)
     (reset! core/current-angles new-angles)))
 ```
-
-**Note:** Depending on your hardware, you may need to add a delay (e.g., `(Thread/sleep 500)`) after sending commands to ensure the movement completes before issuing new instructions.
 
 ### Running a Predefined Path
 To move the robot along a sequence of positions, use the `move-path` function.
@@ -96,7 +85,18 @@ The robot's parameters are defined in `config.edn`. Here’s an example configur
  :max-angle 25
  :min-angle -85
  :gear-ratio 9
- :steps-per-rev 1600}
+ :steps-per-rev 1600
+ ;; pigpiod configuration
+ :pulse-width-us 100
+ :min-frequency 500.0
+ :max-frequency 2000.0
+ :acceleration-pulses 150
+ :deceleration-pulses 150
+ :pulse-overhead-ns 113909
+ :gpio-pins {:motor0 {:step 17 :dir 27}
+             :motor1 {:step 18 :dir 23}
+             :motor2 {:step 19 :dir 25}
+             :limit-switches [22 24 26]}}
 ```
 
 - `upper-arm-length`: Length of the arm attached to the motor (in mm).
@@ -107,6 +107,13 @@ The robot's parameters are defined in `config.edn`. Here’s an example configur
 - `min-angle`: Minimum motor angle (fully extended, in degrees).
 - `gear-ratio`: Gear ratio from the stepper motor to the arm pulley.
 - `steps-per-rev`: Number of stepper motor pulses per revolution.
+- `pulse-width-us`: The duration of the stepper pulse in microseconds.
+- `min-frequency`: The starting frequency for acceleration.
+- `max-frequency`: The target frequency for the stepper motors.
+- `acceleration-pulses`: The number of pulses to use for acceleration.
+- `deceleration-pulses`: The number of pulses to use for deceleration.
+- `pulse-overhead-ns`: A fudge factor for estimating motion duration.
+- `gpio-pins`: The GPIO pins for the stepper motors and limit switches.
 
 Adjust these values to reflect your delta robot's specifications. Note that arm rotation is measured clockwise. Arms are at 0° when they are in the horizontal position (aligned with the `x-axis`)
 

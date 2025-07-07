@@ -5,6 +5,16 @@
  :max-angle 25         ;; fully retracted
  :min-angle -85        ;; fully extended
  :gear-ratio 9         ;; stepper sproket 10mm to 90mm arm pulley
- :steps-per-rev 1600    ;; stepper pulses per revolution
- }
-
+ :steps-per-rev 1600   ;; stepper pulses per revolution
+ 
+ ;; pigpiod configuration
+ :pulse-width-us 100
+ :min-frequency 500.0
+ :max-frequency 2000.0
+ :acceleration-pulses 150
+ :deceleration-pulses 150
+ :pulse-overhead-ns 113909 ; Fudge factor for motion duration estimation
+ :gpio-pins {:motor0 {:step 17 :dir 27}
+             :motor1 {:step 18 :dir 23}
+             :motor2 {:step 19 :dir 25}
+             :limit-switches [22 24 26]}}
