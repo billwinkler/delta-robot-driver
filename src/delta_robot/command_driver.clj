@@ -125,6 +125,11 @@
         ;; Advance the current time to the time of the current event
         (reset! current-time-us event-time)))
 
+    ;; Add a final segment to explicitly turn off all relevant GPIOs after the waveform completes
+    ;; This ensures the pins return to a known LOW state.
+    (let [final-off-mask (reduce bit-or 0 (map (fn [gpio] (bit-shift-left 1 gpio)) all-gpios))]
+      (swap! final-wvag-segments conj (str "0 " final-off-mask " 1"))) ; 1us delay for the final state change
+
     ;; Filters out any `0 0 0` segments. These segments would represent a zero-delay, no-change operation,
     ;; which `pigpio` does not require and can sometimes lead to issues if not explicitly handled or removed.
     (filter (fn [s] (not= "0 0 0" s)) @final-wvag-segments)))
@@ -170,6 +175,74 @@
                 (println "Failed to send command:" (:err result))
                 (println "STDOUT:" (:out result))))))))))
 
+;; diagnostic version
+(defn- execute-waveform [wvag-segments]
+  "Executes the pigpio waveform commands (wvag, wvcre, wvtx) and handles errors."
+  (let [gpio-to-test 11 ; Assuming pin 11 is the one you're testing
+        pulse-on-us 1000 ; Your constant
+        pulse-off-us 1000 ; A long enough off time to see
+        ]
+    ;; Temporary test: send a single pulse directly
+    (println "DEBUG: Running direct single pulse test on GPIO" gpio-to-test)
+    (sh "pigs" "wvclr") ; Clear any existing waveforms
+    (sh "pigs" "m" (str gpio-to-test) "w") ; Set pin to output mode (if not already)
+
+    ;; Define a simple pulse: HIGH for pulse-on-us, then LOW for pulse-off-us
+    (sh "pigs" "wvag" (str (bit-shift-left 1 gpio-to-test)) "0" (str pulse-on-us)) ; Turn ON GPIO
+    (sh "pigs" "wvag" "0" (str (bit-shift-left 1 gpio-to-test)) (str pulse-off-us)) ; Turn OFF GPIO
+
+    (let [wvcre-result (sh "pigs" "wvcre") ; Create the waveform
+          wave-id (-> wvcre-result :out str/trim Integer/parseInt)]
+      (println "DEBUG: Direct test wvcre raw output:" (:out wvcre-result))
+      (println "DEBUG: Direct test wvcre stderr:" (:err wvcre-result))
+      (println "DEBUG: Direct test wave-id parsed:" wave-id)
+      (if (neg? wave-id)
+        (println "ERROR: Direct test failed to create waveform:" (:err wvcre-result))
+        (do
+          (sh "pigs" "wvtx" (str wave-id)) ; Transmit the waveform
+          (println "DEBUG: Direct test waveform sent. Checking busy...")
+          ;; Wait for the wave to finish transmitting
+          (loop []
+            (when (= "1" (str/trim (:out (sh "pigs" "wvbsy"))))
+              (Thread/sleep 10) ; Small delay to avoid busy-waiting
+              (recur)))
+          (sh "pigs" "wvdel" (str wave-id)) ; Delete the wave from pigpio's memory
+          (println "DEBUG: Direct test waveform finished and deleted."))))
+
+    ;; --- Original logic for multiple pulses (commented out for now) ---
+    #_ (if (empty? wvag-segments)
+        (println "No waveform segments generated. Nothing to send.")
+        (let [wvag-command-args (mapcat (fn [s] (str/split s #"\s+")) wvag-segments)
+              batch-size 150 ; Number of arguments per pigs wvag call (50 segments * 3 args/segment)
+              batches (partition-all batch-size wvag-command-args)]
+
+          (println (str "DEBUG: Total number of wvag segments: " (count wvag-segments)))
+          (println (str "DEBUG: Total pigs wvag arguments: " (count wvag-command-args)))
+          (println (str "DEBUG: Number of wvag batches: " (count batches)))
+
+          (doseq [batch batches]
+            (let [result (apply sh (into ["pigs" "wvag"] batch))]
+              (when-not (zero? (:exit result))
+                (println "ERROR: pigs wvag batch failed:")
+                (println "STDOUT:" (:out result))
+                (println "STDERR:" (:err result))
+                (throw (Exception. (str "Failed to add waveform segments. pigpio error: " (:err result)))))))
+
+          (let [wvcre-result (sh "pigs" "wvcre") ; Capture the full result
+                wave-id (-> wvcre-result :out str/trim Integer/parseInt)]
+            (println "DEBUG: pigs wvcre raw output:" (:out wvcre-result))
+            (println "DEBUG: pigs wvcre stderr:" (:err wvcre-result))
+            (println "DEBUG: wave-id parsed:" wave-id)
+            (if (neg? wave-id)
+              (throw (Exception. (str "Failed to create waveform. pigpio error: " (:err wvcre-result)))) ; Include pigpio error in exception
+              (let [result (sh "pigs" "wvtx" (str wave-id))]
+                (if (zero? (:exit result))
+                  (println "Command sent successfully!")
+                  (do
+                    (println "Failed to send command:" (:err result))
+                    (println "STDOUT:" (:out result)))))))))))
+
+
 (defn send-commands [commands]
   (println "commands:" commands)
   (let [wave-data-per-motor (map (fn [cmd] (generate-waveform-data (:motor-number cmd) cmd)) commands)
@@ -184,5 +257,5 @@
   "Sends 100 pulses to the specified motor in the given direction for debugging."
   (println (str "Sending pulses to motor " motor-id " in direction " direction))
   (send-commands [{:motor-number motor-id
-                   :total-pulses 100
+                   :total-pulses 10
                    :direction direction}]))
