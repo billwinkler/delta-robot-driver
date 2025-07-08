@@ -7,6 +7,7 @@
 (def min-phase-pulses 10)
 (def time-scale-precision 10000) ; A constant (set to 10000) that acts as a multiplier to maintain precision during floating-point time calculations, especially when scaling pulse periods to synchronize motor movements.
 (def pulse-on-duration-us 10) ; Duration for step pin to be HIGH in microseconds
+(def limit-switch-pins (get-in config [:gpio-pins :limit-switches]))
 
 (defn- estimate-motion-duration [total-pulses accel-pulses decel-pulses]
   (let [min-period (long (/ 1e9 (:max-frequency config)))
@@ -67,195 +68,62 @@
   (doseq [wd wave-data-per-motor]
     (sh "pigs" "w" (str (:gpio-dir wd)) (str (:direction wd)))))
 
-(defn- populate-gpio-event-queue [wave-data-per-motor max-duration]
-  "Populates an event queue with all pulse ON/OFF transitions across all motors,
-  synchronized to the max-duration."
-  (let [event-queue (atom (sorted-map))] ; Map: timestamp_us -> {:on-gpios #{}, :off-gpios #{}}
-    (doseq [wd wave-data-per-motor]
-      (let [gpio-step (:gpio-step wd)
-            time-scale (if (pos? (:duration wd))
-                         (/ (* max-duration (double time-scale-precision)) (:duration wd))
-                         time-scale-precision)
-            current-time-us (atom 0)]
-        (doseq [period-ns (:periods-ns wd)]
-          (let [scaled-period-us (long (/ (* period-ns time-scale) time-scale-precision 1000)) ; Convert to us
-                ;; Ensure scaled_period_us is at least pulse-on-duration-us + 1 (for minimal OFF time)
-                min-valid-period-us (+ pulse-on-duration-us 1)
-                adjusted-scaled-period-us (max scaled-period-us min-valid-period-us)]
-            ;; Add event to turn step pin ON
-            (swap! event-queue update-in [@current-time-us :on-gpios] (fnil conj #{}) gpio-step)
-            ;; Add event to turn step pin OFF after pulse-on-duration-us
-            (swap! event-queue update-in [@current-time-us (+ @current-time-us pulse-on-duration-us) :off-gpios] (fnil conj #{}) gpio-step)
-            ;; Advance time for the start of the next pulse (total period)
-            (swap! current-time-us + adjusted-scaled-period-us))))) ; Use adjusted period here
-    @event-queue))
+(defn- monitor-limit-switches [wave-id wave-pid]
+  (let [limit-pins limit-switch-pins]
+    (future
+      (loop []
+        (let [pin-values (map #(-> (sh "pigs" "r" (str %)) :out str/trim) limit-pins)]
+          (when (some #(= "0" %) pin-values)
+            (println "Limit switch triggered! Stopping waveform.")
+            (sh "pigs" "wvtx" "0")
+            (when-not (str/blank? wave-pid)
+              (sh "kill" wave-pid "2>/dev/null"))
+            (sh "pigs" "wvdel" wave-id)
+            (println "Waveform" wave-id "stopped and deleted.")))
+        (Thread/sleep 5)
+        (if (= "1" (str/trim (:out (sh "pigs" "wvbsy"))))
+          (recur)
+          (println "Waveform finished or stopped."))))))
 
-(defn- generate-wvag-segments [event-queue wave-data-per-motor]
-  "Converts the event queue into a sequence of (on_mask, off_mask, delay) triplets
-  suitable for `pigs wvag`."
-  (let [final-wvag-segments (atom [])
-        current-time-us (atom 0)
-        current-gpio-levels (atom {}) ; Map: gpio -> 0/1 (tracks the current state of all relevant GPIOs)
-        all-gpios (set (map :gpio-step wave-data-per-motor))]
+(defn- start-wvcha-process [wave-id pulses]
+  (let [x (mod pulses 256)
+        y (quot pulses 256)
+        command (format "pigs wvcha 255 0 %d 255 1 %d %d 255 2 0" wave-id x y)
+        process (sh "bash" "-c" (str command " & echo $!"))
+        pid (str/trim (:out process))]
+    (println "wvcha process started with PID:" pid)
+    pid))
 
-    ;; Initialize all relevant GPIOs to LOW (0)
-    (doseq [gpio all-gpios]
-      (swap! current-gpio-levels assoc gpio 0))
-
-    (doseq [[event-time events] event-queue]
-      (let [delay-since-last-event (- event-time @current-time-us)]
-        ;; If there's a time gap before this event, add a delay segment
-        (when (> delay-since-last-event 0)
-          (swap! final-wvag-segments conj (str "0 0 " delay-since-last-event)))
-
-        ;; Update current GPIO levels based on the events at this timestamp
-        (let [on-gpios (get events :on-gpios #{})
-              off-gpios (get events :off-gpios #{})]
-          (doseq [gpio on-gpios] (swap! current-gpio-levels assoc gpio 1))
-          (doseq [gpio off-gpios] (swap! current-gpio-levels assoc gpio 0)))
-
-        ;; Construct the on_mask and off_mask based on the *new* current state of all GPIOs
-        (let [effective-on-mask (reduce bit-or 0 (map (fn [gpio] (bit-shift-left 1 gpio))
-                                                       (filter (fn [gpio] (= 1 (get @current-gpio-levels gpio))) all-gpios)))
-              effective-off-mask (reduce bit-or 0 (map (fn [gpio] (bit-shift-left 1 gpio))
-                                                        (filter (fn [gpio] (= 0 (get @current-gpio-levels gpio))) all-gpios)))]
-          ;; Add the state change segment with 0 delay (the actual delay was handled by the previous segment)
-          (swap! final-wvag-segments conj (str effective-on-mask " " effective-off-mask " 0")))
-
-        ;; Advance the current time to the time of the current event
-        (reset! current-time-us event-time)))
-
-    ;; Add a final segment to explicitly turn off all relevant GPIOs after the waveform completes
-    ;; This ensures the pins return to a known LOW state.
-    (let [final-off-mask (reduce bit-or 0 (map (fn [gpio] (bit-shift-left 1 gpio)) all-gpios))]
-      (swap! final-wvag-segments conj (str "0 " final-off-mask " 1"))) ; 1us delay for the final state change
-
-    ;; Filters out any `0 0 0` segments. These segments would represent a zero-delay, no-change operation,
-    ;; which `pigpio` does not require and can sometimes lead to issues if not explicitly handled or removed.
-    (filter (fn [s] (not= "0 0 0" s)) @final-wvag-segments)))
-
-(defn- execute-waveform [wvag-segments]
-  "Executes the pigpio waveform commands (wvag, wvcre, wvtx) and handles errors."
-  (if (empty? wvag-segments)
-    (println "No waveform segments generated. Nothing to send.")
-    (let [wvag-command-args (mapcat (fn [s] (str/split s #"\s+")) wvag-segments)
-          batch-size 150 ; Number of arguments per pigs wvag call (50 segments * 3 args/segment)
-          batches (partition-all batch-size wvag-command-args)]
-
-      ;; --- DEBUGGING START ---
-      (println (str "DEBUG: Total number of wvag segments: " (count wvag-segments)))
-      (println (str "DEBUG: Total pigs wvag arguments: " (count wvag-command-args)))
-      (println (str "DEBUG: Number of wvag batches: " (count batches)))
-      ;; (println "DEBUG: wvag command args (first 30):" (take 30 wvag-command-args)) ; Print first few args
-      ;; (println "DEBUG: wvag command args (last 30):" (take-last 30 wvag-command-args)) ; Print last few args
-      ;; (println "DEBUG: wvag segments:" wvag-segments) ; Uncomment to see all segments if needed
-      ;; --- DEBUGGING END ---
-
-      (doseq [batch batches]
-        (let [result (apply sh (into ["pigs" "wvag"] batch))]
-          (when-not (zero? (:exit result))
-            (println "ERROR: pigs wvag batch failed:")
-            (println "STDOUT:" (:out result))
-            (println "STDERR:" (:err result))
-            (throw (Exception. (str "Failed to add waveform segments. pigpio error: " (:err result)))))))
-
-      (let [wvcre-result (sh "pigs" "wvcre") ; Capture the full result
-            wave-id (-> wvcre-result :out str/trim Integer/parseInt)]
-        ;; --- DEBUGGING START ---
-        (println "DEBUG: pigs wvcre raw output:" (:out wvcre-result))
-        (println "DEBUG: pigs wvcre stderr:" (:err wvcre-result))
-        (println "DEBUG: wave-id parsed:" wave-id)
-        ;; --- DEBUGGING END ---
-        (if (neg? wave-id)
-          (throw (Exception. (str "Failed to create waveform. pigpio error: " (:err wvcre-result)))) ; Include pigpio error in exception
-          (let [result (sh "pigs" "wvtx" (str wave-id))]
-            (if (zero? (:exit result))
-              (println "Command sent successfully!")
-              (do
-                (println "Failed to send command:" (:err result))
-                (println "STDOUT:" (:out result))))))))))
-
-;; diagnostic version
-(defn- execute-waveform [wvag-segments]
-  "Executes the pigpio waveform commands (wvag, wvcre, wvtx) and handles errors."
-  (let [gpio-to-test 11 ; Assuming pin 11 is the one you're testing
-        pulse-on-us 1000 ; Your constant
-        pulse-off-us 1000 ; A long enough off time to see
-        ]
-    ;; Temporary test: send a single pulse directly
-    (println "DEBUG: Running direct single pulse test on GPIO" gpio-to-test)
-    (sh "pigs" "wvclr") ; Clear any existing waveforms
-    (sh "pigs" "m" (str gpio-to-test) "w") ; Set pin to output mode (if not already)
-
-    ;; Define a simple pulse: HIGH for pulse-on-us, then LOW for pulse-off-us
-    (sh "pigs" "wvag" (str (bit-shift-left 1 gpio-to-test)) "0" (str pulse-on-us)) ; Turn ON GPIO
-    (sh "pigs" "wvag" "0" (str (bit-shift-left 1 gpio-to-test)) (str pulse-off-us)) ; Turn OFF GPIO
-
-    (let [wvcre-result (sh "pigs" "wvcre") ; Create the waveform
-          wave-id (-> wvcre-result :out str/trim Integer/parseInt)]
-      (println "DEBUG: Direct test wvcre raw output:" (:out wvcre-result))
-      (println "DEBUG: Direct test wvcre stderr:" (:err wvcre-result))
-      (println "DEBUG: Direct test wave-id parsed:" wave-id)
-      (if (neg? wave-id)
-        (println "ERROR: Direct test failed to create waveform:" (:err wvcre-result))
-        (do
-          (sh "pigs" "wvtx" (str wave-id)) ; Transmit the waveform
-          (println "DEBUG: Direct test waveform sent. Checking busy...")
-          ;; Wait for the wave to finish transmitting
-          (loop []
-            (when (= "1" (str/trim (:out (sh "pigs" "wvbsy"))))
-              (Thread/sleep 10) ; Small delay to avoid busy-waiting
-              (recur)))
-          (sh "pigs" "wvdel" (str wave-id)) ; Delete the wave from pigpio's memory
-          (println "DEBUG: Direct test waveform finished and deleted."))))
-
-    ;; --- Original logic for multiple pulses (commented out for now) ---
-    #_ (if (empty? wvag-segments)
-        (println "No waveform segments generated. Nothing to send.")
-        (let [wvag-command-args (mapcat (fn [s] (str/split s #"\s+")) wvag-segments)
-              batch-size 150 ; Number of arguments per pigs wvag call (50 segments * 3 args/segment)
-              batches (partition-all batch-size wvag-command-args)]
-
-          (println (str "DEBUG: Total number of wvag segments: " (count wvag-segments)))
-          (println (str "DEBUG: Total pigs wvag arguments: " (count wvag-command-args)))
-          (println (str "DEBUG: Number of wvag batches: " (count batches)))
-
-          (doseq [batch batches]
-            (let [result (apply sh (into ["pigs" "wvag"] batch))]
-              (when-not (zero? (:exit result))
-                (println "ERROR: pigs wvag batch failed:")
-                (println "STDOUT:" (:out result))
-                (println "STDERR:" (:err result))
-                (throw (Exception. (str "Failed to add waveform segments. pigpio error: " (:err result)))))))
-
-          (let [wvcre-result (sh "pigs" "wvcre") ; Capture the full result
-                wave-id (-> wvcre-result :out str/trim Integer/parseInt)]
-            (println "DEBUG: pigs wvcre raw output:" (:out wvcre-result))
-            (println "DEBUG: pigs wvcre stderr:" (:err wvcre-result))
-            (println "DEBUG: wave-id parsed:" wave-id)
-            (if (neg? wave-id)
-              (throw (Exception. (str "Failed to create waveform. pigpio error: " (:err wvcre-result)))) ; Include pigpio error in exception
-              (let [result (sh "pigs" "wvtx" (str wave-id))]
-                (if (zero? (:exit result))
-                  (println "Command sent successfully!")
-                  (do
-                    (println "Failed to send command:" (:err result))
-                    (println "STDOUT:" (:out result)))))))))))
-
+(defn generate-waveforms [step-pins pulses]
+  (let [mask (reduce bit-or 0 (map #(bit-shift-left 1 %) step-pins))]
+    (sh "pigs" "wvclr")
+    (sh "pigs" "wvag" mask 0 500 0 mask 500)
+    (let [wave-id-str (str/trim (:out (sh "pigs" "wvcre")))]
+      (if-let [wave-id (try (Integer/parseInt wave-id-str) (catch Exception _ nil))]
+        (if (>= wave-id 0)
+          (let [wave-pid (start-wvcha-process wave-id pulses)]
+            (monitor-limit-switches wave-id wave-pid)
+            (println "Waveform started with ID" wave-id ". Monitoring limit switches..."))
+          (println "Error: Failed to create waveform, received wave-id:" wave-id))
+        (println "Error: Failed to parse wave-id:" wave-id-str)))))
 
 (defn send-commands [commands]
-  (println "commands:" commands)
-  (let [wave-data-per-motor (map (fn [cmd] (generate-waveform-data (:motor-number cmd) cmd)) commands)
-        max-duration (apply max (map :duration wave-data-per-motor))
-        event-queue (populate-gpio-event-queue wave-data-per-motor max-duration)
-        wvag-segments (generate-wvag-segments event-queue wave-data-per-motor)]
-
+  (println "Sending commands:" commands)
+  (let [wave-data-per-motor (doall (map (fn [[motor-id cmd]]
+                                          (generate-waveform-data motor-id cmd))
+                                        (vec commands)))
+        step-pins (map :gpio-step wave-data-per-motor)
+        ;; For wvcha, we can use a large number for continuous motion or a specific number.
+        ;; Using 0 for pulses in wvcha means loop forever.
+        pulses 0]
     (clear-and-set-directions wave-data-per-motor)
-    (execute-waveform wvag-segments)))
-  
-(defn send-debug-pulses [motor-id direction]
-  "Sends 100 pulses to the specified motor in the given direction for debugging."
-  (println (str "Sending pulses to motor " motor-id " in direction " direction))
-  (send-commands [{:motor-number motor-id
-                   :total-pulses 10
-                   :direction direction}]))
+    (generate-waveforms step-pins pulses)))
+
+(comment
+  (let [commands {0 {:total-pulses 1000, :direction 1}
+                  1 {:total-pulses 1000, :direction 1}
+                  2 {:total-pulses 1000, :direction 1}}]
+    (send-commands commands))
+
+
+  )
