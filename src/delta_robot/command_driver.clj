@@ -99,8 +99,9 @@
     (throw (IllegalArgumentException. "total-pulses must be positive")))
   (let [x (mod total-pulses 256)
         y (quot total-pulses 256)
-        command (format "wvcha %d 255 1 %d %d 255 2" wave-id x y)
+        command (format "wvcha 255 0 %d 255 1 %d %d" wave-id x y)
         full-command (str "pigs " command)]
+    (log/info (format "delay: x: %s, y: %s, v: %s" x y (+ x (* y 256))))
     (log/info "cmd:" full-command)
     (try
       (let [{:keys [out err exit]} (sh "pigs" command)]
@@ -155,6 +156,7 @@
       (throw (IllegalArgumentException. "All motors must have the same total-pulses for this test")))
     (log/info "step-pins:" step-pins)
     (log/info "wave-data count:" (count wave-data-per-motor))
+    (clear-waveforms)
     (set-direction-pins wave-data-per-motor)
     (generate-waveforms step-pins total-pulses)))
 
