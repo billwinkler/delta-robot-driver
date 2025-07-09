@@ -14,7 +14,7 @@
  :acceleration-pulses 150
  :deceleration-pulses 150
  :pulse-overhead-ns 113909 ; Fudge factor for motion duration estimation
- :gpio-pins {:motor0 {:step 11 :dir 27}
+ :gpio-pins {:motor0 {:step 17 :dir 27}
              :motor1 {:step 18 :dir 23}
              :motor2 {:step 19 :dir 25}
              :limit-switches [22 24 26]}}
