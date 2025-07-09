@@ -1,3 +1,4 @@
+```clojure
 (ns delta-robot.command-driver
   (:require [babashka.process :refer [sh check]]
             [clojure.java.io :as io]
@@ -24,62 +25,33 @@
     (throw (IllegalStateException. "Missing required config keys"))))
 
 (defn- execute-pigs-cmd
-  "Executes a pigpio command and returns trimmed output."
+  "Executes a pigpio command and returns trimmed output. Throws an exception on failure."
   [& args]
+  (log/info "cmd: pigs" (str/join " " args))
   (try
-    (-> (apply sh "pigs" args) :out str/trim)
+    (let [{:keys [out err exit]} (apply sh "pigs" args)]
+      (if (zero? exit)
+        (let [result (str/trim out)]
+          (log/info "pigs result:" result)
+          result)
+        (do
+          (log/errorf "Failed to execute pigs command %s: exit code %d, error: %s" args exit err)
+          (throw (ex-info (str "pigpio command failed: " err) {:command args :exit exit :error err})))))
     (catch Exception e
-      (log/errorf "Failed to execute pigs command %s: %s" args (.getMessage e))
+      (log/errorf "Exception executing pigs command %s: %s" args (.getMessage e))
       (throw e))))
-
-(defn- calculate-period
-  "Calculates period for a pulse based on position in accel/decel phases."
-  [k total-pulses accel-pulses decel-pulses min-period max-period]
-  (cond
-    (and (< k accel-pulses) (> accel-pulses 1))
-    (- max-period (* (- max-period min-period) (/ k (dec accel-pulses))))
-    (and (>= k (- total-pulses decel-pulses)) (> decel-pulses 1))
-    (let [m (- total-pulses 1 k)]
-      (+ min-period (* (- max-period min-period) (/ (- decel-pulses 1 m) (dec decel-pulses)))))
-    :else min-period))
-
-(defn- estimate-motion-duration
-  "Estimates total motion duration in nanoseconds."
-  [total-pulses accel-pulses decel-pulses]
-  (let [min-period (long (/ 1e9 (:max-frequency config)))
-        max-period (long (/ 1e9 (:min-frequency config)))
-        pulse-overhead (:pulse-overhead-ns config)
-        constant-pulses (max 0 (- total-pulses accel-pulses decel-pulses))]
-    (if (<= total-pulses 1)
-      0
-      (long
-        (+ (* (+ max-period min-period) accel-pulses 1/2)
-           (* accel-pulses pulse-overhead)
-           (* constant-pulses (+ min-period pulse-overhead))
-           (* (+ min-period max-period) decel-pulses 1/2)
-           (* decel-pulses pulse-overhead))))))
 
 (defn- generate-waveform-data
   "Generates waveform data for a motor."
   [motor-id {:keys [total-pulses direction]}]
   (let [motor-keyword (keyword (str "motor" motor-id))
         gpio-step (get-in config [:gpio-pins motor-keyword :step])
-        gpio-dir (get-in config [:gpio-pins motor-keyword :dir])
-        [accel-pulses decel-pulses] (if (> total-pulses (+ (:acceleration-pulses config) (:deceleration-pulses config)))
-                                      [(:acceleration-pulses config) (:deceleration-pulses config)]
-                                      (let [half-pulses (quot total-pulses 2)]
-                                        [half-pulses (- total-pulses half-pulses)]))
-        duration (estimate-motion-duration total-pulses accel-pulses decel-pulses)
-        min-period (/ 1e9 (:max-frequency config))
-        max-period (/ 1e9 (:min-frequency config))
-        periods-ns (mapv #(calculate-period % total-pulses accel-pulses decel-pulses min-period max-period)
-                        (range total-pulses))]
+        gpio-dir (get-in config [:gpio-pins motor-keyword :dir])]
     {:motor-id motor-id
      :gpio-step gpio-step
      :gpio-dir gpio-dir
      :direction direction
-     :duration duration
-     :periods-ns periods-ns}))
+     :total-pulses total-pulses}))
 
 (defn- clear-waveforms
   "Clears all existing pigpio waveforms."
@@ -102,7 +74,6 @@
           (log/warn "Limit switch triggered! Stopping waveform.")
           (execute-pigs-cmd "wvtx" "0")
           (when-not (str/blank? wave-pid)
-            ;; kill with errors suppressed in the event the process is already gone
             (sh "kill" wave-pid "2>/dev/null"))
           (execute-pigs-cmd "wvdel" wave-id)
           (log/infof "Waveform %s stopped and deleted." wave-id)
@@ -121,16 +92,30 @@
         (Thread/sleep 5)))
     (log/info "Waveform finished or stopped.")))
 
-(defn- start-wvcha-process
-  "Starts a waveform chain process."
-  [wave-id pulses]
-  (let [x (mod pulses 256)
-        y (quot pulses 256)
-        command (format "pigs wvcha 255 0 %d 255 1 %d %d 255 2 0" wave-id x y)
-        process (check (sh "bash" "-c" (str command " & echo $!")))
-        pid (str/trim (:out process))]
-    (log/infof "wvcha process started with PID: %s" pid)
-    pid))
+(defn- start-waveform-process
+  "Starts a waveform chain process for a fixed number of pulses. Returns its PID."
+  [wave-id total-pulses]
+  (when-not (pos? total-pulses)
+    (throw (IllegalArgumentException. "total-pulses must be positive")))
+  (let [x (mod total-pulses 256)
+        y (quot total-pulses 256)
+        command (format "wvcha %d 255 1 %d %d 255 2" wave-id x y)
+        full-command (str "pigs " command)]
+    (log/info "cmd:" full-command)
+    (try
+      (let [{:keys [out err exit]} (sh "pigs" command)]
+        (if (zero? exit)
+          (let [process (check (sh "bash" "-c" (str full-command " & echo $!")))
+                pid (str/trim (:out process))]
+            (log/infof "wvcha process started with PID: %s" pid)
+            pid)
+          (do
+            (log/errorf "Failed to execute pigs wvcha command: exit code %d, error: %s" exit err)
+            (throw (ex-info (str "pigpio wvcha command failed: " err)
+                            {:command full-command :exit exit :error err})))))
+      (catch Exception e
+        (log/errorf "Exception executing pigs wvcha command %s: %s" full-command (.getMessage e))
+        (throw e)))))
 
 (defn- create-bitmask
   "Creates a bitmask from a list of GPIO pins."
@@ -138,8 +123,8 @@
   (reduce bit-or 0 (map #(bit-shift-left 1 %) pins)))
 
 (defn generate-waveforms
-  "Generates and starts waveforms for step pins."
-  [step-pins pulses]
+  "Generates and starts waveforms for step pins with a fixed number of pulses."
+  [step-pins total-pulses]
   (validate-config)
   (let [mask (create-bitmask step-pins)]
     (clear-waveforms)
@@ -149,9 +134,11 @@
                            (log/errorf "Failed to parse wave-id: %s" (.getMessage e))
                            nil))]
       (if (>= wave-id 0)
-        (let [wave-pid (start-wvcha-process wave-id pulses)]
-          (monitor-limit-switches wave-id wave-pid)
-          (log/infof "Waveform started with ID %s" wave-id))
+        (do
+          (log/info "wave-id:" wave-id)
+          (let [wave-pid (start-waveform-process wave-id total-pulses)]
+            (monitor-limit-switches wave-id wave-pid)
+            (log/infof "Waveform started with ID %s" wave-id)))
         (log/errorf "Failed to create waveform, received wave-id: %s" wave-id))
       (log/error "Failed to create waveform"))))
 
@@ -163,10 +150,13 @@
   (let [wave-data-per-motor (mapv (fn [[motor-id cmd]] (generate-waveform-data motor-id cmd))
                                  commands)
         step-pins (mapv :gpio-step wave-data-per-motor)
-        pulses 0]
-    (clear-waveforms)
+        total-pulses (:total-pulses (first wave-data-per-motor))]
+    (when-not (every? #(= (:total-pulses %) total-pulses) wave-data-per-motor)
+      (throw (IllegalArgumentException. "All motors must have the same total-pulses for this test")))
+    (log/info "step-pins:" step-pins)
+    (log/info "wave-data count:" (count wave-data-per-motor))
     (set-direction-pins wave-data-per-motor)
-    (generate-waveforms step-pins pulses)))
+    (generate-waveforms step-pins total-pulses)))
 
 (comment
   (let [commands {0 {:total-pulses 1000, :direction 1}
