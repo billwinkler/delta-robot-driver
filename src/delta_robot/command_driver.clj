@@ -59,6 +59,15 @@
       (log/errorf "Error in limit switch monitoring: %s" (.getMessage e))
       true)))
 
+(defn- is-motor-at-limit?
+  "Checks if a motor is being commanded up while its limit switch is pressed."
+  [motor-id direction]
+  (if (= direction 1)
+    (let [limit-pin (nth (limit-switch-pins) motor-id)
+          limit-value (execute-pigs-cmd "r" (str limit-pin))]
+      (= "0" limit-value))
+    false))
+
 (defn- monitor-limit-switches
   "Monitors limit switches in a separate thread."
   [wave-id wave-pid]
@@ -108,13 +117,22 @@
   "Processes motor commands, generates a synchronized waveform, and executes it."
   [commands]
   (log/infof "Processing motor commands: %s" commands)
-  ;; Ensure commands are sorted by motor-id to maintain consistent pin order
-  (let [sorted-commands (sort-by key commands)
+  ;; Prevent motors from moving up if they are already at the limit switch.
+  (let [checked-commands (into {}
+                               (map (fn [[motor-id {:keys [total-pulses direction] :as command}]]
+                                      (if (is-motor-at-limit? motor-id direction)
+                                        (do
+                                          (log/warnf "Motor %d is at its limit and commanded to move up. Ignoring command." motor-id)
+                                          [motor-id (assoc command :total-pulses 0)])
+                                        [motor-id command]))
+                                    commands))
+        ;; Ensure commands are sorted by motor-id to maintain consistent pin order
+        sorted-commands (sort-by key checked-commands)
         step-counts (map (comp :total-pulses val) sorted-commands)
         step-pins (motor-step-pins)]
 
     (log/info "Setting motor directions...")
-    (set-direction-pins commands)
+    (set-direction-pins checked-commands)
 
     (log/info "Generating synchronized waveform for steps:" step-counts "on pins:" step-pins)
     (let [{:keys [waveform loop-count]} (timing/generate-waveform-chain step-counts step-pins)]
@@ -125,52 +143,56 @@
 
 ;; --- Homing ---
 
-(defn- home-one-motor
-  "Homes a single motor by moving it until its limit switch is triggered."
-  [motor-id]
-  (let [step-pin (nth (motor-step-pins) motor-id)
-        dir-pin (nth (motor-direction-pins) motor-id)
-        limit-pin (nth (limit-switch-pins) motor-id)
-        homing-freq 1600  ;; A reasonable frequency for homing
-        homing-direction 1] ;; Move "up"
-
-    (log/infof "Homing motor %d on pin %d..." motor-id step-pin)
-
-    ;; Set direction to "up"
-    (execute-pigs-cmd "w" (str dir-pin) (str homing-direction))
-
-    ;; Set frequency and start PWM (50% duty cycle)
-    (execute-pigs-cmd "pfs" (str step-pin) (str homing-freq))
-    (execute-pigs-cmd "p" (str step-pin) "128")
-
-    ;; Poll the limit switch until it's triggered (reads "0")
-    (while (= "1" (execute-pigs-cmd "r" (str limit-pin)))
-      (Thread/sleep 10)) ;; Poll every 10ms to reduce CPU load
-
-    ;; Stop PWM pulses for this motor
-    (execute-pigs-cmd "p" (str step-pin) "0")
-
-    (log/infof "Motor %d homed." motor-id)))
-
 (defn home-motors
   "Executes the homing sequence for all motors in parallel.
   Each motor moves up until its limit switch is triggered."
   []
   (log/info "Starting homing sequence for all motors.")
   (let [motor-ids (range (count (motor-step-pins)))
-        ;; Use futures to run homing for each motor in parallel
-        homing-futures (mapv #(future (home-one-motor %)) motor-ids)]
-    ;; Wait for all futures to complete by dereferencing them
-    (doseq [f homing-futures]
-      @f)
-    (log/info "Homing sequence complete.")))
+        step-pins (motor-step-pins)
+        dir-pins (motor-direction-pins)
+        limit-pins (limit-switch-pins)
+        homing-freq 1600
+        homing-direction 1
+        ;; Atomically track which motors still need to be homed.
+        motors-to-home (atom (into #{}
+                                   (filter (fn [id]
+                                             (let [limit-pin (nth limit-pins id)]
+                                               (not= "0" (execute-pigs-cmd "r" (str limit-pin))))))
+                                   motor-ids))]
+
+    (if (empty? @motors-to-home)
+      (log/info "All motors are already home.")
+      (do
+        (log/infof "Motors to be homed: %s" @motors-to-home)
+
+        ;; Start all non-homed motors.
+        (doseq [motor-id @motors-to-home]
+          (let [dir-pin (nth dir-pins motor-id)
+                step-pin (nth step-pins motor-id)]
+            (execute-pigs-cmd "w" (str dir-pin) (str homing-direction))
+            (execute-pigs-cmd "pfs" (str step-pin) (str homing-freq))
+            (execute-pigs-cmd "p" (str step-pin) "128")))
+
+        ;; Poll limit switches and stop motors individually.
+        (while (not-empty @motors-to-home)
+          (doseq [motor-id @motors-to-home]
+            (let [limit-pin (nth limit-pins motor-id)]
+              (when (= "0" (execute-pigs-cmd "r" (str limit-pin)))
+                (log/infof "Motor %d reached home." motor-id)
+                (let [step-pin (nth step-pins motor-id)]
+                  (execute-pigs-cmd "p" (str step-pin) "0"))
+                (swap! motors-to-home disj motor-id))))
+          (Thread/sleep 10))
+
+        (log/info "Homing sequence complete.")))))
 
 (comment
   ;; Example of moving three motors with different step counts.
   ;; This is now possible with the refactored driver.
-  (let [commands {0 {:total-pulses 100, :direction 0} 
-                  1 {:total-pulses 100, :direction 0} 
-                  2 {:total-pulses 100, :direction 0}}]
+  (let [commands {0 {:total-pulses 500, :direction 1} 
+                  1 {:total-pulses 500, :direction 1} 
+                  2 {:total-pulses 500, :direction 1}}]
     (send-commands commands))
 
   (home-motors)
