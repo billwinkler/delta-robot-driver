@@ -3,7 +3,7 @@
             [clojure.string :as str]
             [clojure.tools.logging :as log]
             [delta-robot.config :refer [motor-step-pins motor-direction-pins limit-switch-pins]]
-            [delta-robot.timing :as timing]))
+            [delta-robot.pulse-timing :as timing]))
 
 ;; --- Utility Functions ---
 
@@ -119,12 +119,12 @@
   (log/infof "Processing motor commands: %s" commands)
   ;; Prevent motors from moving up if they are already at the limit switch.
   (let [checked-commands (into {}
-                               (map (fn [[motor-id {:keys [total-pulses direction] :as command}]]
-                                      (if (is-motor-at-limit? motor-id direction)
+                               (map (fn [{:keys [motor-number total-pulses direction] :as command}]
+                                      (if (is-motor-at-limit? motor-number direction)
                                         (do
-                                          (log/warnf "Motor %d is at its limit and commanded to move up. Ignoring command." motor-id)
-                                          [motor-id (assoc command :total-pulses 0)])
-                                        [motor-id command]))
+                                          (log/warnf "Motor %d is at its limit and commanded to move up. Ignoring command." motor-number)
+                                          [motor-number (assoc command :total-pulses 0)])
+                                        [motor-number command]))
                                     commands))
         ;; Ensure commands are sorted by motor-id to maintain consistent pin order
         sorted-commands (sort-by key checked-commands)
@@ -193,6 +193,11 @@
   (let [commands {0 {:total-pulses 500, :direction 1} 
                   1 {:total-pulses 500, :direction 1} 
                   2 {:total-pulses 500, :direction 1}}]
+    (send-commands commands))
+
+  (let [commands {0 {:total-pulses 500, :direction 0} 
+                  1 {:total-pulses 500, :direction 0} 
+                  2 {:total-pulses 500, :direction 0}}]
     (send-commands commands))
 
   (home-motors)

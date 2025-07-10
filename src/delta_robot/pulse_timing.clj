@@ -1,4 +1,4 @@
-(ns delta-robot.timing
+(ns delta-robot.pulse-timing
   "Calculates and generates a repeatable, interleaved pigpiod waveform
    for synchronized control of multiple stepper motors."
   (:require [delta-robot.config :refer [motor-step-pins]]))

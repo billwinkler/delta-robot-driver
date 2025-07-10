@@ -1,5 +1,5 @@
 (ns delta-robot.motion
-  (:require [delta-robot.command-driver :refer [send-commands]]
+  (:require [delta-robot.command-driver :refer [send-commands home-motors]]
             [delta-robot.config :as cfg]
             [delta-robot.core :refer [compute-step-commands clamp deg->pulses current-angles]]))
 
@@ -7,27 +7,12 @@
   (reset! current-angles (vec (repeat 3 (:max-angle cfg/config)))))
 
 (defn home []
-  (println "WARNING: Homing the robot without limit switches can be dangerous.")
-  (println "The original kernel module handled this, but the new pigpiod-based driver does not.")
-  (println "Ensure the robot has physical stops to prevent damage.")
-  (let [{:keys [min-angle max-angle]} cfg/config
-        ;; Calculate the angular difference (should be negative)
-        delta (- min-angle max-angle)
-        _ (println "delta" delta)
-        ;; Compute the absolute number of pulses required:
-        pulses (Math/abs (deg->pulses delta))
-        ;; For each motor, set the retract direction (assumed to be 1)
-        home-commands (for [i (range 3)]
-                        {:motor-number i
-                         :total-pulses pulses
-                         :direction 1})]
-    (println "Homing: sending home command:" home-commands)
-    (send-commands home-commands)
-    ;; Allow some time for the motors to move and for the limit switches to halt them
-    (Thread/sleep 2000)
-    ;; Reset the current angles to the fully retracted value
-    (reset! current-angles (vec (repeat 3 max-angle)))
-    (println "Homing complete. Current angles:" @current-angles)))
+  (println "Homing the robot...")
+  (home-motors)
+  ;; Reset the current angles to the fully retracted value
+  (let [{:keys [max-angle]} cfg/config]
+    (reset! current-angles (vec (repeat 3 max-angle))))
+  (println "Homing complete. Current angles:" @current-angles))
 
 (def moves
   "A sequence of target coordinates (x y z) for the effector."
