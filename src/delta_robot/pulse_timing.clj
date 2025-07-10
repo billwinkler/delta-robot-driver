@@ -8,12 +8,12 @@
 
 (def high-pulse-us
   "The duration of the 'high' part of a single motor pulse, in microseconds."
-  1)
+  500)
 
 (def min-low-pulse-us
   "The minimum duration of the 'low' part of a single motor pulse, in microseconds.
    This is the duration used by the motor with the most steps."
-  1)
+  500)
 
 ;; --- Helper Functions ---
 

@@ -44,7 +44,7 @@
   "Checks limit switches and stops waveform if triggered. Returns true if waveform should continue."
   [wave-id wave-pid]
   (try
-    (let [pin-values (mapv #(execute-pigs-cmd "r" (str %)) limit-switch-pins)]
+    (let [pin-values (mapv #(execute-pigs-cmd "r" (str %)) (limit-switch-pins))]
       (if (some #(= "0" %) pin-values)
         (do
           (log/warn "Limit switch triggered! Stopping waveform.")
@@ -123,13 +123,58 @@
           (create-and-run-wave waveform loop-count)
           (log/info "No movement required (zero pulses or empty waveform)."))))))
 
+;; --- Homing ---
+
+(defn- home-one-motor
+  "Homes a single motor by moving it until its limit switch is triggered."
+  [motor-id]
+  (let [step-pin (nth (motor-step-pins) motor-id)
+        dir-pin (nth (motor-direction-pins) motor-id)
+        limit-pin (nth (limit-switch-pins) motor-id)
+        homing-freq 1600  ;; A reasonable frequency for homing
+        homing-direction 1] ;; Move "up"
+
+    (log/infof "Homing motor %d on pin %d..." motor-id step-pin)
+
+    ;; Set direction to "up"
+    (execute-pigs-cmd "w" (str dir-pin) (str homing-direction))
+
+    ;; Set frequency and start PWM (50% duty cycle)
+    (execute-pigs-cmd "pfs" (str step-pin) (str homing-freq))
+    (execute-pigs-cmd "p" (str step-pin) "128")
+
+    ;; Poll the limit switch until it's triggered (reads "0")
+    (while (= "1" (execute-pigs-cmd "r" (str limit-pin)))
+      (Thread/sleep 10)) ;; Poll every 10ms to reduce CPU load
+
+    ;; Stop PWM pulses for this motor
+    (execute-pigs-cmd "p" (str step-pin) "0")
+
+    (log/infof "Motor %d homed." motor-id)))
+
+(defn home-motors
+  "Executes the homing sequence for all motors in parallel.
+  Each motor moves up until its limit switch is triggered."
+  []
+  (log/info "Starting homing sequence for all motors.")
+  (let [motor-ids (range (count (motor-step-pins)))
+        ;; Use futures to run homing for each motor in parallel
+        homing-futures (mapv #(future (home-one-motor %)) motor-ids)]
+    ;; Wait for all futures to complete by dereferencing them
+    (doseq [f homing-futures]
+      @f)
+    (log/info "Homing sequence complete.")))
+
 (comment
   ;; Example of moving three motors with different step counts.
   ;; This is now possible with the refactored driver.
-  (let [commands {0 {:total-pulses 2000, :direction 1} ; Motor 0 moves 2000 steps
-                  1 {:total-pulses 1000, :direction 1} ; Motor 1 moves 1000 steps
-                  2 {:total-pulses 500,  :direction 0}}] ; Motor 2 moves 500 steps
+  (let [commands {0 {:total-pulses 100, :direction 0} 
+                  1 {:total-pulses 100, :direction 0} 
+                  2 {:total-pulses 100, :direction 0}}]
     (send-commands commands))
 
-  (timing/run-demo [2000 1000 500])
+  (home-motors)
+
+  (timing/run-demo [100 101 102])
+  (timing/run-demo [2000 1900 1800])
   )
