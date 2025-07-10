@@ -1,31 +1,14 @@
-```clojure
 (ns delta-robot.command-driver
-  (:require [babashka.process :refer [sh check]]
-            [clojure.java.io :as io]
+  (:require [babashka.process :refer [sh]]
             [clojure.string :as str]
             [clojure.tools.logging :as log]
-            [delta-robot.config :refer [config]]))
+            [delta-robot.config :refer [motor-step-pins motor-direction-pins limit-switch-pins]]
+            [delta-robot.timing :as timing]))
 
-;; Constants
-(def ^:const min-phase-pulses 10)
-(def ^:const time-scale-precision 10000)
-(def ^:const pulse-on-duration-us 10)
-(def ^:const limit-switch-pins (get-in config [:gpio-pins :limit-switches]))
-
-;; Utility Functions
-(defn- validate-config
-  "Validates required configuration keys."
-  []
-  (when-not (and (:max-frequency config)
-                 (:min-frequency config)
-                 (:pulse-overhead-ns config)
-                 (:acceleration-pulses config)
-                 (:deceleration-pulses config)
-                 (:gpio-pins config))
-    (throw (IllegalStateException. "Missing required config keys"))))
+;; --- Utility Functions ---
 
 (defn- execute-pigs-cmd
-  "Executes a pigpio command and returns trimmed output. Throws an exception on failure."
+  "Executes a pigpio command via the 'pigs' utility and returns trimmed output."
   [& args]
   (log/info "cmd: pigs" (str/join " " args))
   (try
@@ -41,28 +24,21 @@
       (log/errorf "Exception executing pigs command %s: %s" args (.getMessage e))
       (throw e))))
 
-(defn- generate-waveform-data
-  "Generates waveform data for a motor."
-  [motor-id {:keys [total-pulses direction]}]
-  (let [motor-keyword (keyword (str "motor" motor-id))
-        gpio-step (get-in config [:gpio-pins motor-keyword :step])
-        gpio-dir (get-in config [:gpio-pins motor-keyword :dir])]
-    {:motor-id motor-id
-     :gpio-step gpio-step
-     :gpio-dir gpio-dir
-     :direction direction
-     :total-pulses total-pulses}))
-
 (defn- clear-waveforms
   "Clears all existing pigpio waveforms."
   []
   (execute-pigs-cmd "wvclr"))
 
 (defn- set-direction-pins
-  "Sets direction pins for all motors."
-  [wave-data-per-motor]
-  (doseq [{:keys [gpio-dir direction]} wave-data-per-motor]
-    (execute-pigs-cmd "w" (str gpio-dir) (str direction))))
+  "Sets direction pins for all motors based on their command map."
+  [commands]
+  (let [dir-pins (motor-direction-pins)]
+    (doseq [[motor-id {:keys [direction]}] commands]
+      ;; Safely get the direction pin from the vector using the motor-id as the index.
+      (when-let [dir-pin (nth dir-pins motor-id nil)]
+        (execute-pigs-cmd "w" (str dir-pin) (str direction))))))
+
+;; --- Limit Switch Monitoring ---
 
 (defn- check-limit-switches
   "Checks limit switches and stops waveform if triggered. Returns true if waveform should continue."
@@ -84,7 +60,7 @@
       true)))
 
 (defn- monitor-limit-switches
-  "Monitors limit switches and stops waveform if triggered."
+  "Monitors limit switches in a separate thread."
   [wave-id wave-pid]
   (future
     (while (= "1" (execute-pigs-cmd "wvbsy"))
@@ -92,77 +68,68 @@
         (Thread/sleep 5)))
     (log/info "Waveform finished or stopped.")))
 
-(defn- start-waveform-process
-  "Starts a waveform chain process for a fixed number of pulses. Returns its PID."
-  [wave-id total-pulses]
-  (when-not (pos? total-pulses)
-    (throw (IllegalArgumentException. "total-pulses must be positive")))
-  (let [x (mod total-pulses 256)
-        y (quot total-pulses 256)
-        command (format "wvcha 255 0 %d 255 1 %d %d" wave-id x y)
-        full-command (str "pigs " command)]
-    (log/info (format "delay: x: %s, y: %s, v: %s" x y (+ x (* y 256))))
-    (log/info "cmd:" full-command)
-    (try
-      (let [{:keys [out err exit]} (sh "pigs" command)]
-        (if (zero? exit)
-          (let [process (check (sh "bash" "-c" (str full-command " & echo $!")))
-                pid (str/trim (:out process))]
-            (log/infof "wvcha process started with PID: %s" pid)
-            pid)
-          (do
-            (log/errorf "Failed to execute pigs wvcha command: exit code %d, error: %s" exit err)
-            (throw (ex-info (str "pigpio wvcha command failed: " err)
-                            {:command full-command :exit exit :error err})))))
-      (catch Exception e
-        (log/errorf "Exception executing pigs wvcha command %s: %s" full-command (.getMessage e))
-        (throw e)))))
+;; --- Waveform Execution ---
 
-(defn- create-bitmask
-  "Creates a bitmask from a list of GPIO pins."
-  [pins]
-  (reduce bit-or 0 (map #(bit-shift-left 1 %) pins)))
+(defn- start-waveform-chain
+  "Starts a waveform chain process for a given loop count and returns its PID."
+  [wave-id loop-count]
+  (let [x (mod loop-count 256)
+        y (quot loop-count 256)
+        ;; This command sequence creates a loop that repeats the wave-id 'loop-count' times.
+        command-args ["wvcha" "255" "0" (str wave-id) "255" "1" (str x) (str y)]
+        process (sh "bash" "-c" (str (str/join " " (cons "pigs" command-args)) " & echo $!"))
+        pid (str/trim (:out process))]
+    (log/infof "wvcha process started with PID: %s" pid)
+    pid))
 
-(defn generate-waveforms
-  "Generates and starts waveforms for step pins with a fixed number of pulses."
-  [step-pins total-pulses]
-  (validate-config)
-  (let [mask (create-bitmask step-pins)]
+(defn- create-and-run-wave
+  "Adds a waveform to pigpiod, creates it, and starts the chain."
+  [waveform loop-count]
+  (when (pos? loop-count)
     (clear-waveforms)
-    (execute-pigs-cmd "wvag" mask 0 500 0 mask 500)
+    ;; The waveform is a list of lists, e.g., [[on off delay]...]. Flatten it for the command line.
+    (apply execute-pigs-cmd "wvag" (flatten waveform))
     (if-let [wave-id (try (Integer/parseInt (execute-pigs-cmd "wvcre"))
-                         (catch Exception e
-                           (log/errorf "Failed to parse wave-id: %s" (.getMessage e))
-                           nil))]
+                          (catch Exception e
+                            (log/errorf "Failed to parse wave-id: %s" (.getMessage e))
+                            nil))]
       (if (>= wave-id 0)
         (do
-          (log/info "wave-id:" wave-id)
-          (let [wave-pid (start-waveform-process wave-id total-pulses)]
+          (log/info "Waveform created with ID:" wave-id)
+          (let [wave-pid (start-waveform-chain wave-id loop-count)]
             (monitor-limit-switches wave-id wave-pid)
-            (log/infof "Waveform started with ID %s" wave-id)))
-        (log/errorf "Failed to create waveform, received wave-id: %s" wave-id))
-      (log/error "Failed to create waveform"))))
+            (log/infof "Waveform chain started for wave-id %s" wave-id)))
+        (log/errorf "Failed to create waveform, received invalid wave-id: %s" wave-id))
+      (log/error "Failed to create waveform, no wave-id received"))))
+
+;; --- Main Public Function ---
 
 (defn send-commands
-  "Processes motor commands and generates waveforms."
+  "Processes motor commands, generates a synchronized waveform, and executes it."
   [commands]
-  (log/infof "Sending commands: %s" commands)
-  (validate-config)
-  (let [wave-data-per-motor (mapv (fn [[motor-id cmd]] (generate-waveform-data motor-id cmd))
-                                 commands)
-        step-pins (mapv :gpio-step wave-data-per-motor)
-        total-pulses (:total-pulses (first wave-data-per-motor))]
-    (when-not (every? #(= (:total-pulses %) total-pulses) wave-data-per-motor)
-      (throw (IllegalArgumentException. "All motors must have the same total-pulses for this test")))
-    (log/info "step-pins:" step-pins)
-    (log/info "wave-data count:" (count wave-data-per-motor))
-    (clear-waveforms)
-    (set-direction-pins wave-data-per-motor)
-    (generate-waveforms step-pins total-pulses)))
+  (log/infof "Processing motor commands: %s" commands)
+  ;; Ensure commands are sorted by motor-id to maintain consistent pin order
+  (let [sorted-commands (sort-by key commands)
+        step-counts (map (comp :total-pulses val) sorted-commands)
+        step-pins (motor-step-pins)]
+
+    (log/info "Setting motor directions...")
+    (set-direction-pins commands)
+
+    (log/info "Generating synchronized waveform for steps:" step-counts "on pins:" step-pins)
+    (let [{:keys [waveform loop-count]} (timing/generate-waveform-chain step-counts step-pins)]
+      (do (log/info "loop-count:" loop-count)
+        (if (and (seq waveform) (pos? loop-count))
+          (create-and-run-wave waveform loop-count)
+          (log/info "No movement required (zero pulses or empty waveform)."))))))
 
 (comment
-  (let [commands {0 {:total-pulses 1000, :direction 1}
-                  1 {:total-pulses 1000, :direction 1}
-                  2 {:total-pulses 1000, :direction 1}}]
+  ;; Example of moving three motors with different step counts.
+  ;; This is now possible with the refactored driver.
+  (let [commands {0 {:total-pulses 2000, :direction 1} ; Motor 0 moves 2000 steps
+                  1 {:total-pulses 1000, :direction 1} ; Motor 1 moves 1000 steps
+                  2 {:total-pulses 500,  :direction 0}}] ; Motor 2 moves 500 steps
     (send-commands commands))
+
+  (timing/run-demo [2000 1000 500])
   )
