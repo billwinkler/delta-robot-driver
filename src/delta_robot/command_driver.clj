@@ -10,14 +10,14 @@
 (defn- execute-pigs-cmd
   "Executes a pigpio command via the 'pigs' utility and returns trimmed output."
   [& args]
-  (if (> (count args) 15)
-    (log/info "cmd: pigs" (str/join " " (take 15 args)) "...")
-    (log/info "cmd: pigs" (str/join " " args)))
+  ;; (if (> (count args) 15)
+  ;;   (log/info "cmd: pigs" (str/join " " (take 15 args)) "...")
+  ;;   (log/info "cmd: pigs" (str/join " " args)))
   (try
     (let [{:keys [out err exit]} (apply sh "pigs" args)]
       (if (zero? exit)
         (let [result (str/trim out)]
-          (log/info "pigs result:" result)
+;;          (log/info "pigs result:" result)
           result)
         (do
           (log/errorf "Failed to execute pigs command %s: exit code %d, error: %s" args exit err)
@@ -42,12 +42,30 @@
         (execute-pigs-cmd "w" (str dir-pin) (str direction))))))
 
 ;; --- Limit Switch Monitoring ---
+(defn- check-limit-switches
+  "Checks limit switches and stops waveform if triggered. Returns true if waveform should continue."
+  [wave-ids _]
+  (try
+    (let [pin-values (mapv #(execute-pigs-cmd "r" (str %)) (limit-switch-pins))]
+      (if (some #(= "0" %) pin-values)
+        (do
+          (log/warn "Limit switch triggered! Stopping waveform.")
+          (execute-pigs-cmd "wvhlt")
+          (doseq [wid wave-ids]
+            (execute-pigs-cmd "wvdel" (str wid)))
+          (log/infof "Waveforms %s stopped and deleted." wave-ids)
+          false)
+        true))
+    (catch Exception e
+      (log/errorf "Error in limit switch monitoring: %s" (.getMessage e))
+      true)))
+
 (defn- monitor-limit-switches
   "Monitors limit switches in a separate thread."
-  [wave-ids wave-pid]
+  [wave-ids _]
   (future
     (while (= "1" (execute-pigs-cmd "wvbsy"))
-      (when (check-limit-switches wave-ids wave-pid)
+      (when (check-limit-switches wave-ids nil)
         (Thread/sleep 5)))
     (doseq [wid wave-ids]
       (execute-pigs-cmd "wvdel" (str wid)))
@@ -66,22 +84,17 @@
 (defn- start-waveform-chain
   "Starts a waveform chain process for the given wave-ids and loop count, and returns its PID."
   [wave-ids loop-count]
-  (let [repeats (max 0 (- loop-count 1))
+  (let [repeats loop-count
         lo (mod repeats 256)
         hi (quot repeats 256)
-        chain (concat (when (> loop-count 1) ["255" "1" (str lo) (str hi)])
-                      (map str wave-ids)
-                      (when (> loop-count 1) ["255" "2"]))
-        command-args (into ["wvcha"] chain)
-        cmd-str (str/join " " (cons "pigs" command-args))
-        process (sh "bash" "-c" (str cmd-str " & echo $!"))]
-    (if (zero? (:exit process))
-      (let [pid (str/trim (:out process))]
-        (log/infof "wvcha process started with PID: %s for command: %s" pid cmd-str)
-        pid)
-      (do
-        (log/errorf "Failed to start wvcha: %s" (:err process))
-        nil))))
+        chain (if (> loop-count 1)
+                (concat ["255" "0"]
+                        (map str wave-ids)
+                        ["255" "1" (str lo) (str hi)])
+                (map str wave-ids))
+        command-args (into ["wvcha"] chain)]
+    (apply execute-pigs-cmd command-args)
+    (log/infof "wvcha started successfully for command: pigs %s" (str/join " " command-args))))
 
 (defn- create-and-run-wave
   "Adds waveforms to pigpiod, creates them, and starts the chain."
@@ -99,11 +112,9 @@
       (if (and (seq wave-ids) (every? #(>= % 0) wave-ids))
         (do
           (log/info "Waveforms created with IDs:" wave-ids)
-          (if-let [wave-pid (start-waveform-chain wave-ids loop-count)]
-            (do
-              (monitor-limit-switches wave-ids wave-pid)
-              (log/infof "Waveform chain started for wave-ids %s" wave-ids))
-            (log/error "Failed to start waveform chain")))
+          (start-waveform-chain wave-ids loop-count)
+          (monitor-limit-switches wave-ids nil)
+          (log/infof "Waveform chain started for wave-ids %s" wave-ids))
         (log/error "Failed to create one or more waveforms")))))
 
 ;; --- Main Public Function ---
@@ -188,8 +199,8 @@
   ;; Example of moving three motors with different step counts.
   ;; This is now possible with the refactored driver.
   (let [commands {0 {:total-pulses 500, :direction 1} 
-                  1 {:total-pulses 500, :direction 1} 
-                  2 {:total-pulses 500, :direction 1}}]
+                  1 {:total-pulses 501, :direction 1} 
+                  2 {:total-pulses 502, :direction 1}}]
     (send-commands commands))
 
   (let [commands {0 {:total-pulses 500, :direction 0} 
