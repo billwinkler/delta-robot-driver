@@ -10,7 +10,9 @@
 (defn- execute-pigs-cmd
   "Executes a pigpio command via the 'pigs' utility and returns trimmed output."
   [& args]
-  (log/info "cmd: pigs" (str/join " " args))
+  (if (> (count args) 15)
+    (log/info "cmd: pigs" (str/join " " (take 15 args)) "...")
+    (log/info "cmd: pigs" (str/join " " args)))
   (try
     (let [{:keys [out err exit]} (apply sh "pigs" args)]
       (if (zero? exit)
@@ -32,7 +34,7 @@
 (defn- set-direction-pins
   "Sets direction pins for all motors based on their command map."
   [commands]
-  (log/info "set-direction-pins received:" commands)
+  (log/info "setting direction pins:" commands)
   (let [dir-pins (motor-direction-pins)]
     (doseq [[motor-id {:keys [direction]}] commands]
       ;; Safely get the direction pin from the vector using the motor-id as the index.
@@ -138,10 +140,10 @@
     (set-direction-pins checked-commands)
 
     (log/info "Generating synchronized waveform for steps:" step-counts "on pins:" step-pins)
-    (let [{:keys [waveform loop-count]} (timing/generate-waveform-chain step-counts step-pins)]
-      (do (log/info "loop-count:" loop-count)
-        (if (and (seq waveform) (pos? loop-count))
-          (create-and-run-wave waveform loop-count)
+    (let [{:keys [waveforms loop-count]} (timing/generate-waveform-chain step-counts step-pins)]
+      (do (log/info "loop-count:" loop-count "waveforms:" (count waveforms))
+        (if (and (seq waveforms) (pos? loop-count))
+          (create-and-run-wave waveforms loop-count)
           (log/info "No movement required (zero pulses or empty waveform)."))))))
 
 ;; --- Homing ---
