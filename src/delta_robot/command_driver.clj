@@ -119,7 +119,7 @@
   (log/infof "Processing motor commands: %s" commands)
   ;; Prevent motors from moving up if they are already at the limit switch.
   (let [checked-commands (into {}
-                               (map (fn [{:keys [motor-number total-pulses direction] :as command}]
+                               (map (fn [motor-number {:keys [total-pulses direction] :as command}]
                                       (if (is-motor-at-limit? motor-number direction)
                                         (do
                                           (log/warnf "Motor %d is at its limit and commanded to move up. Ignoring command." motor-number)
@@ -131,6 +131,7 @@
         step-counts (map (comp :total-pulses val) sorted-commands)
         step-pins (motor-step-pins)]
 
+    (log/info "Checked-commands:" checked-commands)
     (log/info "Setting motor directions...")
     (set-direction-pins checked-commands)
 
