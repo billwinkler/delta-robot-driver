@@ -20,7 +20,7 @@
   This is a soft limit to avoid exceeding pigpiod's internal memory limits
   for a single waveform. Larger pulse trains will be split into a chain
   of multiple waveforms."
-  20)
+  100)
 
 ;; --- Helper Functions ---
 

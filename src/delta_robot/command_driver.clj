@@ -42,25 +42,16 @@
         (execute-pigs-cmd "w" (str dir-pin) (str direction))))))
 
 ;; --- Limit Switch Monitoring ---
-
-(defn- check-limit-switches
-  "Checks limit switches and stops waveform if triggered. Returns true if waveform should continue."
-  [wave-id wave-pid]
-  (try
-    (let [pin-values (mapv #(execute-pigs-cmd "r" (str %)) (limit-switch-pins))]
-      (if (some #(= "0" %) pin-values)
-        (do
-          (log/warn "Limit switch triggered! Stopping waveform.")
-          (execute-pigs-cmd "wvtx" "0")
-          (when-not (str/blank? wave-pid)
-            (sh "kill" wave-pid "2>/dev/null"))
-          (execute-pigs-cmd "wvdel" wave-id)
-          (log/infof "Waveform %s stopped and deleted." wave-id)
-          false)
-        true))
-    (catch Exception e
-      (log/errorf "Error in limit switch monitoring: %s" (.getMessage e))
-      true)))
+(defn- monitor-limit-switches
+  "Monitors limit switches in a separate thread."
+  [wave-ids wave-pid]
+  (future
+    (while (= "1" (execute-pigs-cmd "wvbsy"))
+      (when (check-limit-switches wave-ids wave-pid)
+        (Thread/sleep 5)))
+    (doseq [wid wave-ids]
+      (execute-pigs-cmd "wvdel" (str wid)))
+    (log/info "Waveform finished or stopped.")))
 
 (defn- is-motor-at-limit?
   "Checks if a motor is being commanded up while its limit switch is pressed."
@@ -71,48 +62,49 @@
       (= "0" limit-value))
     false))
 
-(defn- monitor-limit-switches
-  "Monitors limit switches in a separate thread."
-  [wave-id wave-pid]
-  (future
-    (while (= "1" (execute-pigs-cmd "wvbsy"))
-      (when (check-limit-switches wave-id wave-pid)
-        (Thread/sleep 5)))
-    (log/info "Waveform finished or stopped.")))
-
 ;; --- Waveform Execution ---
-
 (defn- start-waveform-chain
-  "Starts a waveform chain process for a given loop count and returns its PID."
-  [wave-id loop-count]
-  (let [x (mod loop-count 256)
-        y (quot loop-count 256)
-        ;; This command sequence creates a loop that repeats the wave-id 'loop-count' times.
-        command-args ["wvcha" "255" "0" (str wave-id) "255" "1" (str x) (str y)]
-        process (sh "bash" "-c" (str (str/join " " (cons "pigs" command-args)) " & echo $!"))
-        pid (str/trim (:out process))]
-    (log/infof "wvcha process started with PID: %s" pid)
-    pid))
+  "Starts a waveform chain process for the given wave-ids and loop count, and returns its PID."
+  [wave-ids loop-count]
+  (let [repeats (max 0 (- loop-count 1))
+        lo (mod repeats 256)
+        hi (quot repeats 256)
+        chain (concat (when (> loop-count 1) ["255" "1" (str lo) (str hi)])
+                      (map str wave-ids)
+                      (when (> loop-count 1) ["255" "2"]))
+        command-args (into ["wvcha"] chain)
+        cmd-str (str/join " " (cons "pigs" command-args))
+        process (sh "bash" "-c" (str cmd-str " & echo $!"))]
+    (if (zero? (:exit process))
+      (let [pid (str/trim (:out process))]
+        (log/infof "wvcha process started with PID: %s for command: %s" pid cmd-str)
+        pid)
+      (do
+        (log/errorf "Failed to start wvcha: %s" (:err process))
+        nil))))
 
 (defn- create-and-run-wave
-  "Adds a waveform to pigpiod, creates it, and starts the chain."
-  [waveform loop-count]
+  "Adds waveforms to pigpiod, creates them, and starts the chain."
+  [waveforms loop-count]
   (when (pos? loop-count)
     (clear-waveforms)
-    ;; The waveform is a list of lists, e.g., [[on off delay]...]. Flatten it for the command line.
-    (apply execute-pigs-cmd "wvag" (flatten waveform))
-    (if-let [wave-id (try (Integer/parseInt (execute-pigs-cmd "wvcre"))
-                          (catch Exception e
-                            (log/errorf "Failed to parse wave-id: %s" (.getMessage e))
-                            nil))]
-      (if (>= wave-id 0)
+    (let [wave-ids (keep (fn [pulse-chunk]
+                           (apply execute-pigs-cmd "wvag" (flatten pulse-chunk))
+                           (try
+                             (Integer/parseInt (execute-pigs-cmd "wvcre"))
+                             (catch Exception e
+                               (log/errorf "Failed to parse wave-id: %s" (.getMessage e))
+                               nil)))
+                         waveforms)]
+      (if (and (seq wave-ids) (every? #(>= % 0) wave-ids))
         (do
-          (log/info "Waveform created with ID:" wave-id)
-          (let [wave-pid (start-waveform-chain wave-id loop-count)]
-            (monitor-limit-switches wave-id wave-pid)
-            (log/infof "Waveform chain started for wave-id %s" wave-id)))
-        (log/errorf "Failed to create waveform, received invalid wave-id: %s" wave-id))
-      (log/error "Failed to create waveform, no wave-id received"))))
+          (log/info "Waveforms created with IDs:" wave-ids)
+          (if-let [wave-pid (start-waveform-chain wave-ids loop-count)]
+            (do
+              (monitor-limit-switches wave-ids wave-pid)
+              (log/infof "Waveform chain started for wave-ids %s" wave-ids))
+            (log/error "Failed to start waveform chain")))
+        (log/error "Failed to create one or more waveforms")))))
 
 ;; --- Main Public Function ---
 
