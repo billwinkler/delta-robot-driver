@@ -32,6 +32,7 @@
 (defn- set-direction-pins
   "Sets direction pins for all motors based on their command map."
   [commands]
+  (log/info "set-direction-pins received:" commands)
   (let [dir-pins (motor-direction-pins)]
     (doseq [[motor-id {:keys [direction]}] commands]
       ;; Safely get the direction pin from the vector using the motor-id as the index.
@@ -119,7 +120,8 @@
   (log/infof "Processing motor commands: %s" commands)
   ;; Prevent motors from moving up if they are already at the limit switch.
   (let [checked-commands (into {}
-                               (map (fn [motor-number {:keys [total-pulses direction] :as command}]
+                               (map (fn [[motor-number {:keys [total-pulses direction] :as command}]]
+                                      (log/info "motor:" motor-number)
                                       (if (is-motor-at-limit? motor-number direction)
                                         (do
                                           (log/warnf "Motor %d is at its limit and commanded to move up. Ignoring command." motor-number)
