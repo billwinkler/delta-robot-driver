@@ -204,8 +204,8 @@
     (send-commands commands))
 
   (let [commands {0 {:total-pulses 500, :direction 0} 
-                  1 {:total-pulses 500, :direction 0} 
-                  2 {:total-pulses 500, :direction 0}}]
+                  1 {:total-pulses 501, :direction 0} 
+                  2 {:total-pulses 502, :direction 0}}]
     (send-commands commands))
 
   (home-motors)

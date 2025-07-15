@@ -28,14 +28,18 @@
 (defn move-path [moves]
   "Iterate over a sequence of target positions, sending the corresponding motor commands and updating the state."
   (doseq [[x y z] moves]
-    (let [{:keys [commands new-angles]} (compute-step-commands x y z)]
+    (let [{:keys [commands new-angles]} (compute-step-commands x y z)
+          command-map (into {} (map (fn [{:keys [motor-number total-pulses direction]}]
+                                      [motor-number {:total-pulses total-pulses :direction direction}])
+                                    commands))]
       (println "Sending commands:" commands)
-      (send-commands commands)
+      (send-commands command-map)
       ;; Update state after movement completes.
       (reset! current-angles new-angles)
       ;; Optionally pause before the next move.
-;;      (Thread/sleep 500)
+      ;; (Thread/sleep 500)
       )))
+
 
 (comment
   (reset)
