@@ -1,18 +1,26 @@
 (ns delta-robot.motion
-  (:require [delta-robot.command-driver :refer [send-commands home-motors]]
+  (:require [delta-robot.command-driver :refer [send-commands home-motors busy-wait]]
             [delta-robot.config :as cfg]
-            [delta-robot.core :refer [compute-step-commands clamp deg->pulses current-angles]]))
+            [delta-robot.core :refer [compute-step-commands clamp deg->pulses current-angles]]
+            [clojure.tools.logging :as log]))
 
 (defn reset []
   (reset! current-angles (vec (repeat 3 (:max-angle cfg/config)))))
 
+(defn nudge []
+      ;; 0 is down
+  (let [commands {0 {:total-pulses 100, :direction 0} 
+                  1 {:total-pulses 100, :direction 0} 
+                  2 {:total-pulses 100, :direction 0}}]
+    (send-commands commands)))
+
 (defn home []
-  (println "Homing the robot...")
+  (log/info "Homing the robot...")
   (home-motors)
   ;; Reset the current angles to the fully retracted value
   (let [{:keys [max-angle]} cfg/config]
     (reset! current-angles (vec (repeat 3 max-angle))))
-  (println "Homing complete. Current angles:" @current-angles))
+  (log/info "Homing complete. Current angles:" @current-angles))
 
 (def moves
   "A sequence of target coordinates (x y z) for the effector."
@@ -32,7 +40,7 @@
           command-map (into {} (map (fn [{:keys [motor-number total-pulses direction]}]
                                       [motor-number {:total-pulses total-pulses :direction direction}])
                                     commands))]
-      (println "Sending commands:" commands)
+      (log/info "Sending commands:" commands)
       (send-commands command-map)
       ;; Update state after movement completes.
       (reset! current-angles new-angles)
@@ -40,21 +48,50 @@
       ;; (Thread/sleep 500)
       )))
 
-
 (comment
   (reset)
   (let [[x y z] [100 100 300]
         {:keys [commands new-angles]} (compute-step-commands x y z)]
-      (println "Sending commands:" commands)
-      (send-commands commands)
-      ;; Update state after movement completes.
-      (reset! current-angles new-angles)
-      )
+    (println "Sending commands:" commands)
+    (send-commands commands)
+    ;; Update state after movement completes.
+    (reset! current-angles new-angles)
+    )
   (compute-step-commands 0 0 400)
   (dotimes [n 3]
     (move-path moves))
   
-  (move-path [[0 0 400]])
+  (move-path [[0 0 410]])
+  (move-path [[20 20 400]])
+  
+  (move-path [[70 70 300]])
+  (move-path [[60 60 300]])
+  (move-path [[50 50 300]])
+  (move-path [[40 40 300]])
+  (move-path [[20 20 300]])
+  (move-path [[10 10 300]])
+  (move-path [[-20 -20 300]])
+  (move-path [[-30 -30 300]])
+  (move-path [[-50 -50 300]])
+  (move-path [[-70 -70 300]])
+  (move-path [[-80 -80 300]])
+  (move-path [[-90 -90 300]])
+
+  (do
+    (move-path [[0 -100 300]])
+    (busy-wait)
+    (move-path [[0 100 300]])
+    (busy-wait)
+    (move-path [[100 0 300]])
+    (busy-wait)
+    (move-path [[-100 0 300]]))
+
+  
+  (move-path [[0 0 190]])
+  (reset)
   (home)
-)
+  (nudge)
+
+
+  )
 

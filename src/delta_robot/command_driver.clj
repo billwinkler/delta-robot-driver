@@ -26,6 +26,10 @@
       (log/errorf "Exception executing pigs command %s: %s" args (.getMessage e))
       (throw e))))
 
+(defn busy-wait []
+  (while (= "1" (execute-pigs-cmd "wvbsy"))
+    (Thread/sleep 5)))
+
 (defn- clear-waveforms
   "Clears all existing pigpio waveforms."
   []
@@ -203,9 +207,10 @@
                   2 {:total-pulses 502, :direction 1}}]
     (send-commands commands))
 
-  (let [commands {0 {:total-pulses 500, :direction 0} 
-                  1 {:total-pulses 501, :direction 0} 
-                  2 {:total-pulses 502, :direction 0}}]
+  ;; 0 is down
+  (let [commands {0 {:total-pulses 100, :direction 0} 
+                  1 {:total-pulses 100, :direction 0} 
+                  2 {:total-pulses 100, :direction 0}}]
     (send-commands commands))
 
   (home-motors)
