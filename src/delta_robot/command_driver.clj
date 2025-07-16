@@ -208,9 +208,9 @@
     (send-commands commands))
 
   ;; 0 is down
-  (let [commands {0 {:total-pulses 100, :direction 0} 
-                  1 {:total-pulses 100, :direction 0} 
-                  2 {:total-pulses 100, :direction 0}}]
+  (let [commands {0 {:total-pulses 500, :direction 0} 
+                  1 {:total-pulses 500, :direction 0} 
+                  2 {:total-pulses 500, :direction 0}}]
     (send-commands commands))
 
   (home-motors)
