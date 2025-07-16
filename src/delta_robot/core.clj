@@ -1,6 +1,7 @@
 (ns delta-robot.core
   (:require [delta-robot.config :as cfg]
-            [delta-robot.inverse-kinematics :as ik]))
+            [delta-robot.inverse-kinematics :as ik]
+            [clojure.tools.logging :as log]))
 
 ;; We maintain current motor angles in an atom (in degrees)
 ;; Assume initial state is fully retracted
@@ -22,29 +23,29 @@
      :new-angles - the target angles (after clamping) for each motor.
    Uses the current-angles atom, clamp, and deg->pulses helper functions."
   [x y z]
-  (println "DEBUG: Computing step commands for target:" [x y z])
-  (println "DEBUG: Starting current-angles:" @current-angles)
+  (log/debug "Computing step commands for target:" [x y z])
+  (log/debug "Starting current-angles:" @current-angles)
   (let [angles (ik/delta-calc-inverse x y z)]
     (if-not angles
       (throw (Exception. "Target position unreachable"))
       (let [{:keys [theta1 theta2 theta3]} angles
             desired-angles [theta1 theta2 theta3]
             clamped-angles (mapv clamp  desired-angles)
-            _  (println "DEBUG: desired-angles:" desired-angles)
-            _  (println "DEBUG: clamped-angles:" clamped-angles)
+            _  (log/debug "desired-angles:" desired-angles)
+            _  (log/debug "clamped-angles:" clamped-angles)
             angle-deltas (mapv - clamped-angles @current-angles)
-            _  (println "DEBUG: angle-deltas:" angle-deltas)
+            _  (log/debug "angle-deltas:" angle-deltas)
             commands (map-indexed
                       (fn [i delta]
                         (let [pulses (Math/abs (deg->pulses delta))
                               direction (if (pos? delta) 1 0)]
-                          (println "DEBUG: Motor" i "move:" delta "deg =>" pulses "pulses, direction:" direction)
+                          (log/debug "Motor" i "move:" delta "deg =>" pulses "pulses, direction:" direction)
                           {:motor-number i
                            :total-pulses pulses
                            :direction direction}))
                       angle-deltas)]
-        (println "DEBUG: Computed new angles:" clamped-angles)
-        (println "DEBUG: Commands:" commands)
+        (log/debug "Computed new angles:" clamped-angles)
+        (log/debug "Commands:" commands)
         {:commands commands :new-angles clamped-angles}))))
 
 (comment

@@ -1,6 +1,7 @@
 (ns delta-robot.inverse-kinematics
   (:require [clojure.math :as m]
-            [delta-robot.config :as cfg]))
+            [delta-robot.config :as cfg]
+            [clojure.tools.logging :as log]))
 
 ;; Constants and Helper Functions
 (def PI Math/PI)
@@ -129,5 +130,5 @@
                         {:z 442.360 :theta 280}
                         {:z 446.581 :theta 275}]]
     (doseq [{:keys [z theta]} physical-model]
-      (println "z:" z "expected;" ((comp - unwrap) theta)
+      (log/debug "z:" z "expected;" ((comp - unwrap) theta)
                "computed:" (Math/round (:theta1 (delta-calc-inverse 0 0 z)))))))
