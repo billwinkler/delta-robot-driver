@@ -20,4 +20,7 @@
 (defn limit-switch-pins []
   (get-in config [:gpio-pins :limit-switches]))
 
+(defn effector-servo-pin []
+  (get-in config [:gpio-pins :effector-servo]))
+
 

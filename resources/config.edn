@@ -17,4 +17,5 @@
  :gpio-pins {:motor0 {:step 17 :dir 27}
              :motor1 {:step 18 :dir 23}
              :motor2 {:step 19 :dir 25}
-             :limit-switches [22 24 26]}}
+             :limit-switches [22 24 26]
+             :effector-servo 16}}
