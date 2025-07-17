@@ -1,5 +1,6 @@
 (ns delta-robot.motion
   (:require [delta-robot.command-driver :refer [send-commands home-motors busy-wait]]
+            [delta-robot.gripper :refer [open close grip]]
             [delta-robot.config :as cfg]
             [delta-robot.core :refer [compute-step-commands clamp deg->pulses current-angles]]
             [clojure.tools.logging :as log]))
@@ -87,10 +88,58 @@
     (move-path [[-100 0 300]]))
 
   
-  (move-path [[0 0 190]])
+  (move-path [[0 0 250]])
+  (move-path [[45 -30 380]])
+  (move-path [[45 -30 420]])
+  (grip 30)
+  (open)
+  (move-path [[0 0 250]])
+  (move-path [[-115 25 380]])
+
   (reset)
-  (home)
-  (nudge)
+  (do
+    (move-path [[0 0 250]])
+    (Thread/sleep 5000)
+    (home)
+    (Thread/sleep 3000)
+    (nudge)
+    (Thread/sleep 2000)
+    (nudge)
+    (Thread/sleep 2000))
+  (do
+    (do
+      (open)
+      (Thread/sleep 3000)
+      (move-path [[0 0 250]])
+      (Thread/sleep 3000)
+      (move-path [[45 -30 380]])
+      (Thread/sleep 5000)
+      (move-path [[45 -30 420]])
+      (Thread/sleep 3000)
+      (grip 30)
+      )
+    (Thread/sleep 3000)
+    (do
+      (move-path [[0 0 250]])
+      (Thread/sleep 3000)
+      (move-path [[-115 25 380]])
+      (Thread/sleep 3000)
+      (move-path [[-115 25 400]])
+      (Thread/sleep 2000)
+      (open)
+      ))
+  (Thread/sleep 3000)
+  (do
+    (move-path [[0 0 250]])
+    (Thread/sleep 3000)
+    (close)
+    (Thread/sleep 2000)
+    (move-path [[45 -30 380]])
+    (Thread/sleep 5000)
+    (move-path [[45 -30 420]])
+    (Thread/sleep 3000)
+    (grip 30)
+    )
 
 
   )
