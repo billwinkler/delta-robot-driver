@@ -13,11 +13,13 @@
   (let [commands {0 {:total-pulses 100, :direction 0} 
                   1 {:total-pulses 100, :direction 0} 
                   2 {:total-pulses 100, :direction 0}}]
-    (send-commands commands)))
+    (send-commands commands)
+    (busy-wait)))
 
 (defn home []
   (log/info "Homing the robot...")
   (home-motors)
+  (busy-wait)
   ;; Reset the current angles to the fully retracted value
   (let [{:keys [max-angle]} cfg/config]
     (reset! current-angles (vec (repeat 3 max-angle))))
@@ -43,6 +45,7 @@
                                     commands))]
       (log/info "Sending commands:" commands)
       (send-commands command-map)
+      (busy-wait)
       ;; Update state after movement completes.
       (reset! current-angles new-angles)
       ;; Optionally pause before the next move.
@@ -99,58 +102,33 @@
   (reset)
   (do
     (move-path [[0 0 250]])
-    (Thread/sleep 5000)
     (home)
-    (Thread/sleep 3000)
     (nudge)
-    (Thread/sleep 2000)
-    (nudge)
-    (Thread/sleep 2000))
+    (nudge))
   
   (do
+    (home)
     (do
       (move-path [[0 0 250]])
-      (Thread/sleep 5000)
-      (home)
-      (Thread/sleep 3000)
-      (nudge)
-      (Thread/sleep 2000)
-      (nudge)
-      (Thread/sleep 2000))
-    (do
-      (open)
-      (Thread/sleep 3000)
-      (move-path [[0 0 250]])
-      (Thread/sleep 3000)
       (move-path [[45 -30 380]])
-      (Thread/sleep 5000)
-      (move-path [[45 -30 420]])
-      (Thread/sleep 3000)
-      (grip 30)
-      )
-    (Thread/sleep 3000)
-    (do
-      (move-path [[0 0 250]])
-      (Thread/sleep 3000)
-      (move-path [[-115 25 380]])
-      (Thread/sleep 3000)
-      (move-path [[-115 25 400]])
-      (Thread/sleep 2000)
       (open)
-      )
-    (Thread/sleep 3000)
+      (Thread/sleep 1000)
+      (move-path [[45 -30 425]])
+      (grip 30))
+    (Thread/sleep 1000)
     (do
       (move-path [[0 0 250]])
-      (Thread/sleep 3000)
-      (close)
-      (do
-        (move-path [[0 0 250]])
-        (Thread/sleep 5000)
-        (home)
-        (Thread/sleep 3000)
-        (nudge)
-        (Thread/sleep 2000)
-        (nudge))))
+      (move-path [[-100 25 250]])
+      (move-path [[-100 25 350]])
+      (Thread/sleep 1000)
+      (open)
+      (Thread/sleep 1000)
+      (move-path [[-100 25 350]])
+      (move-path [[-100 25 250]])
+      (move-path [[0 0 250]]))
+    (Thread/sleep 1000)
+    (home)
+    (close))
 
 
   )
