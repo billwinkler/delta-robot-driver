@@ -48,10 +48,17 @@
 ;; --- Limit Switch Monitoring ---
 (defn- check-limit-switches
   "Checks limit switches and stops waveform if triggered. Returns true if waveform should continue."
-  [wave-ids _]
+  [wave-ids commands]
   (try
-    (let [pin-values (mapv #(execute-pigs-cmd "r" (str %)) (limit-switch-pins))]
-      (if (some #(= "0" %) pin-values)
+    (let [pin-values (mapv #(execute-pigs-cmd "r" (str %)) (limit-switch-pins))
+          should-stop (some (fn [motor-id]
+                              (when-let [cmd (get commands motor-id)]
+                                (let [dir (:direction cmd 0)
+                                      pulses (:total-pulses cmd 0)
+                                      val (nth pin-values motor-id)]
+                                  (and (> pulses 0) (= dir 1) (= "0" val)))))
+                            (keys commands))]
+      (if should-stop
         (do
           (log/warn "Limit switch triggered! Stopping waveform.")
           (execute-pigs-cmd "wvhlt")
@@ -66,10 +73,10 @@
 
 (defn- monitor-limit-switches
   "Monitors limit switches in a separate thread."
-  [wave-ids _]
+  [wave-ids commands]
   (future
     (while (= "1" (execute-pigs-cmd "wvbsy"))
-      (when (check-limit-switches wave-ids nil)
+      (when (check-limit-switches wave-ids commands)
         (Thread/sleep 5)))
     (doseq [wid wave-ids]
       (execute-pigs-cmd "wvdel" (str wid)))
@@ -102,7 +109,7 @@
 
 (defn- create-and-run-wave
   "Adds waveforms to pigpiod, creates them, and starts the chain."
-  [waveforms loop-count]
+  [waveforms loop-count commands]
   (when (pos? loop-count)
     (clear-waveforms)
     (let [wave-ids (keep (fn [pulse-chunk]
@@ -117,12 +124,11 @@
         (do
           (log/info "Waveforms created with IDs:" wave-ids)
           (start-waveform-chain wave-ids loop-count)
-          (monitor-limit-switches wave-ids nil)
+          (monitor-limit-switches wave-ids commands)
           (log/infof "Waveform chain started for wave-ids %s" wave-ids))
         (log/error "Failed to create one or more waveforms")))))
 
 ;; --- Main Public Function ---
-
 (defn send-commands
   "Processes motor commands, generates a synchronized waveform, and executes it."
   [commands]
@@ -150,7 +156,7 @@
     (let [{:keys [waveforms loop-count]} (timing/generate-waveform-chain step-counts step-pins)]
       (do (log/info "loop-count:" loop-count "waveforms:" (count waveforms))
         (if (and (seq waveforms) (pos? loop-count))
-          (create-and-run-wave waveforms loop-count)
+          (create-and-run-wave waveforms loop-count checked-commands)
           (log/info "No movement required (zero pulses or empty waveform)."))))))
 
 ;; --- Homing ---
