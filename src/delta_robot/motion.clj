@@ -106,7 +106,17 @@
     (Thread/sleep 2000)
     (nudge)
     (Thread/sleep 2000))
+  
   (do
+    (do
+      (move-path [[0 0 250]])
+      (Thread/sleep 5000)
+      (home)
+      (Thread/sleep 3000)
+      (nudge)
+      (Thread/sleep 2000)
+      (nudge)
+      (Thread/sleep 2000))
     (do
       (open)
       (Thread/sleep 3000)
@@ -127,19 +137,20 @@
       (move-path [[-115 25 400]])
       (Thread/sleep 2000)
       (open)
-      ))
-  (Thread/sleep 3000)
-  (do
-    (move-path [[0 0 250]])
+      )
     (Thread/sleep 3000)
-    (close)
-    (Thread/sleep 2000)
-    (move-path [[45 -30 380]])
-    (Thread/sleep 5000)
-    (move-path [[45 -30 420]])
-    (Thread/sleep 3000)
-    (grip 30)
-    )
+    (do
+      (move-path [[0 0 250]])
+      (Thread/sleep 3000)
+      (close)
+      (do
+        (move-path [[0 0 250]])
+        (Thread/sleep 5000)
+        (home)
+        (Thread/sleep 3000)
+        (nudge)
+        (Thread/sleep 2000)
+        (nudge))))
 
 
   )
