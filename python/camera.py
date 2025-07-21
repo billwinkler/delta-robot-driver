@@ -1,43 +1,41 @@
-# python/camera.py
-import os
-import time
+from picamera2 import Picamera2
 import cv2
+import time
+import argparse
 
-# Constants
-DATA_DIR = 'pecan_data'
-os.makedirs(DATA_DIR, exist_ok=True)
-
-def capture_image():
+def capture_image(output_path):
     """
-    Captures an image from the camera, resizes it, and saves it to the data directory.
+    Captures a single image and saves it to the specified path.
+
+    Args:
+        output_path (str): The full path where the image will be saved.
     """
-    camera = None
-    for i in range(5):
-        camera = cv2.VideoCapture(i)
-        if camera.isOpened():
-            print(f"Camera found at index {i}")
-            break
-        camera.release()
-
-    if camera is None or not camera.isOpened():
-        raise IOError("Cannot open camera")
-
+    picam = Picamera2()
     try:
-        time.sleep(0.5) # wait for camera to initialize
-        ret, frame = camera.read()
-        if ret:
-            resized_frame = cv2.resize(frame, (224, 224))  # Resize for model input
-            timestamp = time.strftime("%Y%m%d-%H%M%S")
-            filename = os.path.join(DATA_DIR, f"capture_{timestamp}.jpg")
-            cv2.imwrite(filename, resized_frame)
-            print(f"Image saved to {filename}")
-            return filename
-        else:
-            raise ValueError("Failed to capture frame from camera")
+        # Configure for a single, high-quality capture
+        config = picam.create_still_configuration(main={"size": (640, 480)})
+        picam.configure(config)
+        picam.start()
+        
+        # Allow time for the camera to adjust to lighting
+        time.sleep(1)
+        
+        # Capture the image data
+        frame = picam.capture_array()
+        
+        # Convert from RGB (picamera2) to BGR (OpenCV)
+        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        
+        # Save the image to the specified file
+        cv2.imwrite(output_path, frame_bgr)
+        print(f"Image saved to {output_path}")
+
     finally:
-        if camera and camera.isOpened():
-            camera.release()
+        picam.stop()
 
 if __name__ == "__main__":
-    capture_image()
-
+    parser = argparse.ArgumentParser(description="Capture an image from the camera.")
+    parser.add_argument("output_path", help="The full path to save the captured image.")
+    args = parser.parse_args()
+    
+    capture_image(args.output_path)
