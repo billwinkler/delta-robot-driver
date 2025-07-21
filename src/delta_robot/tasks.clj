@@ -61,9 +61,11 @@
     (motion/move-to x y z)))
 
 (defn- open-gripper [m]
+  (println "Opening gripper...")
   (gripper/open))
 
 (defn- close-gripper [m]
+  (println "Closing gripper...")
   (gripper/close))
 
 (def gripper-set-spec {:mm {:coerce :int :require true :desc "The opening in millimeters."}})
