@@ -1,4 +1,4 @@
-{:paths ["src" "test"]
+{:paths ["src" "test" "python"]
  :tasks {test:bb {:extra-paths ["test"]
                   :extra-deps {io.github.cognitect-labs/test-runner
                                {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
@@ -18,7 +18,11 @@
          gripper
          {:doc "control the gripper"
           :task (exec 'delta-robot.tasks/gripper)}
-         
+
          home
          {:doc "home the robot"
-          :task (exec 'delta-robot.tasks/home)}}}
+          :task (exec 'delta-robot.tasks/home)}
+
+         camera
+         {:doc "take a picture"
+          :task (exec 'delta-robot.tasks/camera)}}}

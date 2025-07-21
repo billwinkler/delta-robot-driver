@@ -2,7 +2,8 @@
   (:require
    [babashka.cli :as cli]
    [delta-robot.motion :as motion]
-   [delta-robot.gripper :as gripper]))
+   [delta-robot.gripper :as gripper]
+   [babashka.process :as p]))
 
 (defn error-fn
   "Error-function called when parse-opts exception is caught"
@@ -87,5 +88,10 @@
   "Homes the robot"
   [m]
   (motion/home))
+
+(defn camera
+  "Takes a picture using the camera"
+  [m]
+  (p/shell "python/.venv/bin/python" "python/camera.py"))
 
 
