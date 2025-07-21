@@ -25,4 +25,8 @@
 
          camera
          {:doc "take a picture"
-          :task (exec 'delta-robot.tasks/camera)}}}
+          :task (exec 'delta-robot.tasks/camera)}
+          
+         collect-data
+         {:doc "collect training data"
+          :task (exec 'delta-robot.tasks/collect-data)}}}

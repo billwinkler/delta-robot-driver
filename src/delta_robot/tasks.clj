@@ -3,7 +3,9 @@
    [babashka.cli :as cli]
    [delta-robot.motion :as motion]
    [delta-robot.gripper :as gripper]
-   [babashka.process :as p]))
+   [babashka.process :as p]
+   [babashka.fs :as fs]
+   [clojure.string :as str]))
 
 (defn error-fn
   "Error-function called when parse-opts exception is caught"
@@ -93,5 +95,65 @@
   "Takes a picture using the camera"
   [m]
   (p/shell "python/.venv/bin/python" "python/camera.py"))
+
+(def collect-data-config
+  "Configuration for data collection."
+  {:home-position [0 0 275]    ; The [x y z] coordinates over the pecan
+   :z-height 275               ; Constant Z height for all movements
+   :max-offset 50              ; Max random distance in mm for x and y
+   :num-samples 10             ; Number of images to collect
+   :data-dir "pecan_training_data"
+   :images-dir "pecan_training_data/images"})
+
+(defn- random-offset
+  "Generates a random [x y] offset."
+  [max-val]
+  [(- (rand-int (* 2 max-val)) max-val)
+   (- (rand-int (* 2 max-val)) max-val)])
+
+(defn- capture-image!
+  "Calls the python script to capture an image."
+  [image-path]
+  (let [result @(p/process ["python" "python/camera.py" image-path] {:err :inherit})]
+    (when-not (zero? (:exit result))
+      (println "Error capturing image."))))
+
+(defn- collect-samples
+  "Main loop to collect training data."
+  []
+  (let [[home-x home-y home-z] (:home-position collect-data-config)
+        {:keys [num-samples max-offset z-height images-dir]} collect-data-config]
+    (loop [i 0
+           labels []]
+      (if (< i num-samples)
+        (let [offset (random-offset max-offset)
+              [offset-x offset-y] offset
+              target-x (+ home-x offset-x)
+              target-y (+ home-y offset-y)
+              image-name (format "sample_%04d.jpg" i)
+              image-path (str (fs/path images-dir image-name))]
+
+          (println (format "Sample %d/%d: offset %s" (inc i) num-samples offset))
+
+          (motion/move-to target-x target-y z-height)
+          (capture-image! image-path)
+          (motion/move-to home-x home-y home-z)
+
+          (recur (inc i) (conj labels {:image image-name :offset offset})))
+        labels))))
+
+(defn collect-data
+  "Collects training data by taking pictures at random offsets."
+  [m]
+  (println "Starting data collection...")
+  (fs/create-dirs (:images-dir collect-data-config))
+  (motion/home)
+
+  (let [collected-labels (collect-samples)
+        labels-path (str (fs/path (:data-dir collect-data-config) "labels.edn"))]
+    (println "\nSaving labels to" labels-path)
+    (spit labels-path (with-out-str (clojure.pprint/pprint collected-labels))))
+
+  (println "Data collection complete."))
 
 
