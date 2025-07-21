@@ -91,10 +91,24 @@
   [m]
   (motion/home))
 
+(def camera-spec
+  (merge help-spec
+         {:output-path {:type :string
+                        :desc "The full path to save the captured image. Defaults to a timestamped filename in the current directory."}}))
+
 (defn camera
   "Takes a picture using the camera"
-  [m]
-  (p/shell "python/.venv/bin/python" "python/camera.py"))
+  {:org.babashka/cli {:spec camera-spec
+                      :args->opts [:output-path]
+                      :error-fn error-fn}}
+  [{:keys [output-path help]}]
+  (if help
+    (println (cli/format-opts {:spec camera-spec}))
+    (let [path (or output-path
+                   (let [timestamp (.format (java.time.LocalDateTime/now)
+                                            (java.time.format.DateTimeFormatter/ofPattern "yyyy-MM-dd_HH-mm-ss"))]
+                     (str "capture-" timestamp ".jpg")))]
+      (p/shell "python/.venv/bin/python" "python/camera.py" path))))
 
 (def collect-data-spec
   (merge help-spec
