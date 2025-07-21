@@ -125,7 +125,7 @@
           (log/info "Waveforms created with IDs:" wave-ids)
           (start-waveform-chain wave-ids loop-count)
           (monitor-limit-switches wave-ids commands)
-          (log/infof "Waveform chain started for wave-ids %s" wave-ids))
+          (log/infof "Waveform chain started for wave-ids %s" (vec wave-ids)))
         (log/error "Failed to create one or more waveforms")))))
 
 ;; --- Main Public Function ---

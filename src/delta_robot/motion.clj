@@ -36,21 +36,25 @@
    [0 0 275]
    [0 0 217]])
 
+(defn move-to [x y z]
+  "Move the effector to a single target position (x y z)."
+  (let [{:keys [commands new-angles]} (compute-step-commands x y z)
+        command-map (into {} (map (fn [{:keys [motor-number total-pulses direction]}]
+                                    [motor-number {:total-pulses total-pulses :direction direction}])
+                                  commands))]
+    (log/info "Sending commands:" commands)
+    (send-commands command-map)
+    (busy-wait)
+    ;; Update state after movement completes.
+    (reset! current-angles new-angles)))
+
 (defn move-path [moves]
   "Iterate over a sequence of target positions, sending the corresponding motor commands and updating the state."
   (doseq [[x y z] moves]
-    (let [{:keys [commands new-angles]} (compute-step-commands x y z)
-          command-map (into {} (map (fn [{:keys [motor-number total-pulses direction]}]
-                                      [motor-number {:total-pulses total-pulses :direction direction}])
-                                    commands))]
-      (log/info "Sending commands:" commands)
-      (send-commands command-map)
-      (busy-wait)
-      ;; Update state after movement completes.
-      (reset! current-angles new-angles)
-      ;; Optionally pause before the next move.
-      ;; (Thread/sleep 500)
-      )))
+    (move-to x y z)
+    ;; Optionally pause before the next move.
+    ;; (Thread/sleep 500)
+    ))
 
 (comment
   (reset)
@@ -65,43 +69,39 @@
   (dotimes [n 3]
     (move-path moves))
   
-  (move-path [[0 0 410]])
-  (move-path [[20 20 400]])
+  (move-to 0 0 410)
+  (move-to 20 20 400)
   
-  (move-path [[70 70 300]])
-  (move-path [[60 60 300]])
-  (move-path [[50 50 300]])
-  (move-path [[40 40 300]])
-  (move-path [[20 20 300]])
-  (move-path [[10 10 300]])
-  (move-path [[-20 -20 300]])
-  (move-path [[-30 -30 300]])
-  (move-path [[-50 -50 300]])
-  (move-path [[-70 -70 300]])
-  (move-path [[-80 -80 300]])
-  (move-path [[-90 -90 300]])
+  (move-to 70 70 300)
+  (move-to 60 60 300)
+  (move-to 50 50 300)
+  (move-to 40 40 300)
+  (move-to 20 20 300)
+  (move-to 10 10 300)
+  (move-to -20 -20 300)
+  (move-to -30 -30 300)
+  (move-to -50 -50 300)
+  (move-to -70 -70 300)
+  (move-to -80 -80 300)
+  (move-to -90 -90 300)
 
   (do
-    (move-path [[0 -100 300]])
-    (busy-wait)
-    (move-path [[0 100 300]])
-    (busy-wait)
-    (move-path [[100 0 300]])
-    (busy-wait)
-    (move-path [[-100 0 300]]))
-
+    (move-to 0 -100 300)
+    (move-to 0 100 300)
+    (move-to 100 0 300)
+    (move-to -100 0 300))
   
-  (move-path [[0 0 250]])
-  (move-path [[45 -30 380]])
-  (move-path [[45 -30 420]])
+  (move-to 0 0 250)
+  (move-to 45 -30 380)
+  (move-to 45 -30 420)
   (grip 30)
   (open)
-  (move-path [[0 0 250]])
-  (move-path [[-115 25 380]])
+  (move-to 0 0 250)
+  (move-to -115 25 380)
 
   (reset)
   (do
-    (move-path [[0 0 250]])
+    (move-to 0 0 250)
     (home)
     (nudge)
     (nudge))
@@ -109,23 +109,23 @@
   (do
     (home)
     (do
-      (move-path [[0 0 250]])
-      (move-path [[45 -30 380]])
+      (move-to 0 0 250)
+      (move-to 45 -30 380)
       (open)
       (Thread/sleep 1000)
-      (move-path [[45 -30 425]])
+      (move-to 45 -30 425)
       (grip 30))
     (Thread/sleep 1000)
     (do
-      (move-path [[0 0 250]])
-      (move-path [[-100 25 250]])
-      (move-path [[-100 25 350]])
+      (move-to 0 0 250)
+      (move-to -100 25 250)
+      (move-to -100 25 350)
       (Thread/sleep 1000)
       (open)
       (Thread/sleep 1000)
-      (move-path [[-100 25 350]])
-      (move-path [[-100 25 250]])
-      (move-path [[0 0 250]]))
+      (move-to -100 25 350)
+      (move-to -100 25 250)
+      (move-to 0 0 250))
     (Thread/sleep 1000)
     (home)
     (close))
