@@ -108,7 +108,9 @@
                    (let [timestamp (.format (java.time.LocalDateTime/now)
                                             (java.time.format.DateTimeFormatter/ofPattern "yyyy-MM-dd_HH-mm-ss"))]
                      (str "capture-" timestamp ".jpg")))]
-      (p/shell "python/.venv/bin/python" "python/camera.py" path))))
+      (p/shell "python/.venv/bin/python" "python/camera.py" path)
+;;      (p/shell "python/.venv/bin/python" "python/pecan_detector_debug.py" path)
+      )))
 
 (def collect-data-spec
   (merge help-spec
