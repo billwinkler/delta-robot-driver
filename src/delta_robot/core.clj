@@ -1,11 +1,16 @@
 (ns delta-robot.core
   (:require [delta-robot.config :as cfg]
             [delta-robot.inverse-kinematics :as ik]
-            [clojure.tools.logging :as log]))
+            [clojure.tools.logging :as log]
+            [delta-robot.state :as state]))
 
 ;; We maintain current motor angles in an atom (in degrees)
 ;; Assume initial state is fully retracted
-(def current-angles (atom (vec (repeat 3 (:max-angle cfg/config)))))
+(def current-angles
+  (atom
+   (if-let [loaded-state (state/load-state)]
+     (:current-angles loaded-state)
+     (vec (repeat 3 (:max-angle cfg/config))))))
 
 ;; Convert an angular difference (in degrees) to motor pulses.
 (defn deg->pulses [deg]

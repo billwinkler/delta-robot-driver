@@ -3,7 +3,8 @@
             [delta-robot.gripper :refer [open close grip]]
             [delta-robot.config :as cfg]
             [delta-robot.core :refer [compute-step-commands clamp deg->pulses current-angles]]
-            [clojure.tools.logging :as log]))
+            [clojure.tools.logging :as log]
+            [delta-robot.state :as state]))
 
 (defn reset []
   (reset! current-angles (vec (repeat 3 (:max-angle cfg/config)))))
@@ -22,7 +23,8 @@
   (busy-wait)
   ;; Reset the current angles to the fully retracted value
   (let [{:keys [max-angle]} cfg/config]
-    (reset! current-angles (vec (repeat 3 max-angle))))
+    (reset! current-angles (vec (repeat 3 max-angle)))
+    (state/save-state {:current-angles @current-angles}))
   (log/info "Homing complete. Current angles:" @current-angles))
 
 (def moves
@@ -46,7 +48,8 @@
     (send-commands command-map)
     (busy-wait)
     ;; Update state after movement completes.
-    (reset! current-angles new-angles)))
+    (reset! current-angles new-angles)
+    (state/save-state {:current-angles @current-angles})))
 
 (defn move-path [moves]
   "Iterate over a sequence of target positions, sending the corresponding motor commands and updating the state."
