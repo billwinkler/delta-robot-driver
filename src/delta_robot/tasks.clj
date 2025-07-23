@@ -5,7 +5,8 @@
    [delta-robot.gripper :as gripper]
    [babashka.process :as p]
    [babashka.fs :as fs]
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   [clojure.edn :as edn]))
 
 (defn error-fn
   "Error-function called when parse-opts exception is caught"
@@ -116,7 +117,7 @@
   (merge help-spec
          {:home-x {:coerce :int :default 0 :desc "Home X coordinate."}
           :home-y {:coerce :int :default 0 :desc "Home Y coordinate."}
-          :z-height {:coerce :int :default 275 :desc "Constant Z height for movements."}
+          :z-height {:coerce :int :default 400 :desc "Constant Z height for movements."}
           :max-offset {:coerce :int :default 50 :desc "Max random distance in mm for x and y."}
           :num-samples {:coerce :int :default 10 :desc "Number of images to collect."}
           :data-dir {:type :string :default "pecan_training_data" :desc "Directory to store data."}}))
@@ -130,14 +131,14 @@
 (defn- capture-image!
   "Calls the python script to capture an image."
   [image-path]
-  (let [result @(p/process ["python" "python/camera.py" (str image-path)] {:err :inherit})]
+  (let [result @(p/process ["python/.venv/bin/python" "python/camera.py" (str image-path)] {:err :inherit})]
     (when-not (zero? (:exit result))
       (println "Error capturing image."))))
 
 (defn- collect-samples
   "Main loop to collect training data."
   [config]
-  (let [{:keys [home-x home-y z-height num-samples max-offset images-dir]} config]
+  (let [{:keys [home-x home-y z-height num-samples max-offset images-dir timestamp]} config]
     (loop [i 0
            labels []]
       (if (< i num-samples)
@@ -145,7 +146,7 @@
               [offset-x offset-y] offset
               target-x (+ home-x offset-x)
               target-y (+ home-y offset-y)
-              image-name (format "sample_%04d.jpg" i)
+              image-name (format "%s_sample_%04d.jpg" timestamp i)
               image-path (fs/path images-dir image-name)]
 
           (println (format "Sample %d/%d: offset %s" (inc i) num-samples offset))
@@ -164,16 +165,28 @@
   [{:keys [help] :as opts}]
   (if help
     (println (cli/format-opts {:spec collect-data-spec}))
-    (let [config (assoc opts :images-dir (fs/path (:data-dir opts) "images"))]
+    (let [timestamp (.format (java.time.LocalDateTime/now)
+                             (java.time.format.DateTimeFormatter/ofPattern "yyyy-MM-dd_HH-mm-ss"))
+          config (assoc opts
+                        :images-dir (fs/path (:data-dir opts) "images")
+                        :timestamp timestamp)
+          labels-path (fs/path (:data-dir opts) "labels.edn")]
       (println "Starting data collection with config:")
       (clojure.pprint/pprint (dissoc config :spec))
       (fs/create-dirs (:images-dir config))
       (motion/home)
+      (println "Moving to intermediate safe height.")
+      (motion/move-to 0 0 300)
+      (println "Moving to data collection start position.")
+      (motion/move-to (:home-x config) (:home-y config) (:z-height config))
 
-      (let [collected-labels (collect-samples config)
-            labels-path (fs/path (:data-dir config) "labels.edn")]
-        (println "\nSaving labels to" labels-path)
-        (spit (str labels-path) (with-out-str (clojure.pprint/pprint collected-labels))))
+      (let [existing-labels (if (fs/exists? labels-path)
+                              (vec (edn/read-string (slurp (str labels-path))))
+                              [])
+            new-labels (collect-samples config)
+            all-labels (into existing-labels new-labels)]
+        (println "\nSaving" (count new-labels) "new labels to" labels-path)
+        (spit (str labels-path) (with-out-str (clojure.pprint/pprint all-labels))))
 
       (println "Data collection complete."))))
 
