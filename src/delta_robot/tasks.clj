@@ -154,7 +154,8 @@
 
           (motion/move-to target-x target-y z-height)
           (capture-image! image-path)
-          (motion/move-to home-x home-y z-height)
+;;          (motion/move-to home-x home-y z-height)
+;;          (Thread/sleep 1000)
 
           (recur (inc i) (conj labels {:image image-name
                                        :offset offset
