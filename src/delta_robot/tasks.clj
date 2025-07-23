@@ -138,7 +138,8 @@
 (defn- collect-samples
   "Main loop to collect training data."
   [config]
-  (let [{:keys [home-x home-y z-height num-samples max-offset images-dir timestamp]} config]
+  (let [{:keys [home-x home-y z-height num-samples max-offset images-dir timestamp]} config
+        home-pos [home-x home-y z-height]]
     (loop [i 0
            labels []]
       (if (< i num-samples)
@@ -155,7 +156,9 @@
           (capture-image! image-path)
           (motion/move-to home-x home-y z-height)
 
-          (recur (inc i) (conj labels {:image image-name :offset offset})))
+          (recur (inc i) (conj labels {:image image-name
+                                       :offset offset
+                                       :home home-pos})))
         labels))))
 
 (defn collect-data
