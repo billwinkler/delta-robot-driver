@@ -115,11 +115,11 @@
 
 (def collect-data-spec
   (merge help-spec
-         {:home-x {:coerce :int :default 0 :desc "Home X coordinate."}
-          :home-y {:coerce :int :default 0 :desc "Home Y coordinate."}
-          :z-height {:coerce :int :default 400 :desc "Constant Z height for movements."}
+         {:home-x {:coerce :int :default 0 :desc "Home X coordinate." :alias :x}
+          :home-y {:coerce :int :default 0 :desc "Home Y coordinate." :alias :y}
+          :z-height {:coerce :int :default 400 :desc "Constant Z height for movements." :alias :z}
           :max-offset {:coerce :int :default 50 :desc "Max random distance in mm for x and y."}
-          :num-samples {:coerce :int :default 10 :desc "Number of images to collect."}
+          :num-samples {:coerce :int :default 10 :desc "Number of images to collect." :alias :n}
           :data-dir {:type :string :default "pecan_training_data" :desc "Directory to store data."}}))
 
 (defn- random-offset
