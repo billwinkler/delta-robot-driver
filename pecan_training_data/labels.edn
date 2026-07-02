@@ -1,0 +1,1181 @@
+[{:image "2025-07-23_12-41-50_sample_0000.jpg",
+  :offset [-27 41],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-41-50_sample_0001.jpg",
+  :offset [-1 -21],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-42-34_sample_0000.jpg",
+  :offset [-23 -15],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-42-34_sample_0001.jpg",
+  :offset [-34 10],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-43-14_sample_0000.jpg",
+  :offset [30 29],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-43-14_sample_0001.jpg",
+  :offset [14 -3],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-43-14_sample_0002.jpg",
+  :offset [-22 -17],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-43-14_sample_0003.jpg",
+  :offset [-25 10],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-43-14_sample_0004.jpg",
+  :offset [34 11],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-43-14_sample_0005.jpg",
+  :offset [-14 16],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-43-14_sample_0006.jpg",
+  :offset [28 3],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-43-14_sample_0007.jpg",
+  :offset [-41 -16],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-43-14_sample_0008.jpg",
+  :offset [44 6],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-43-14_sample_0009.jpg",
+  :offset [-21 -19],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-45-38_sample_0000.jpg",
+  :offset [6 49],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-45-38_sample_0001.jpg",
+  :offset [49 -12],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-45-38_sample_0002.jpg",
+  :offset [-28 9],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-45-38_sample_0003.jpg",
+  :offset [31 40],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-45-38_sample_0004.jpg",
+  :offset [47 61],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-45-38_sample_0005.jpg",
+  :offset [20 47],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-45-38_sample_0006.jpg",
+  :offset [-26 23],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-45-38_sample_0007.jpg",
+  :offset [31 57],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-45-38_sample_0008.jpg",
+  :offset [-28 -59],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-45-38_sample_0009.jpg",
+  :offset [-38 39],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0000.jpg",
+  :offset [-21 -27],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0001.jpg",
+  :offset [-49 13],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0002.jpg",
+  :offset [-45 62],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0003.jpg",
+  :offset [-3 68],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0004.jpg",
+  :offset [-4 5],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0005.jpg",
+  :offset [8 22],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0006.jpg",
+  :offset [-30 -5],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0007.jpg",
+  :offset [34 -53],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0008.jpg",
+  :offset [55 50],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0009.jpg",
+  :offset [-70 2],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0010.jpg",
+  :offset [-65 -14],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0011.jpg",
+  :offset [-47 46],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0012.jpg",
+  :offset [56 48],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0013.jpg",
+  :offset [2 38],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0014.jpg",
+  :offset [29 -16],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0015.jpg",
+  :offset [23 5],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0016.jpg",
+  :offset [-23 13],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0017.jpg",
+  :offset [-41 -53],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0018.jpg",
+  :offset [-13 -54],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0019.jpg",
+  :offset [-17 60],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0020.jpg",
+  :offset [69 -34],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0021.jpg",
+  :offset [-39 59],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0022.jpg",
+  :offset [57 -39],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0023.jpg",
+  :offset [56 61],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0024.jpg",
+  :offset [42 -11],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0025.jpg",
+  :offset [44 -68],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0026.jpg",
+  :offset [14 -31],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0027.jpg",
+  :offset [37 -32],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0028.jpg",
+  :offset [14 0],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0029.jpg",
+  :offset [58 -64],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0030.jpg",
+  :offset [15 -64],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0031.jpg",
+  :offset [31 38],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0032.jpg",
+  :offset [14 -34],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0033.jpg",
+  :offset [39 -9],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0034.jpg",
+  :offset [-41 -10],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0035.jpg",
+  :offset [12 65],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0036.jpg",
+  :offset [56 -67],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0037.jpg",
+  :offset [35 30],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0038.jpg",
+  :offset [-57 24],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0039.jpg",
+  :offset [15 7],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0040.jpg",
+  :offset [24 -19],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0041.jpg",
+  :offset [-43 55],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0042.jpg",
+  :offset [-47 33],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0043.jpg",
+  :offset [48 30],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0044.jpg",
+  :offset [42 -41],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0045.jpg",
+  :offset [-65 -66],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0046.jpg",
+  :offset [45 62],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0047.jpg",
+  :offset [49 5],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0048.jpg",
+  :offset [-51 18],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0049.jpg",
+  :offset [19 -26],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0050.jpg",
+  :offset [-70 -23],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0051.jpg",
+  :offset [15 52],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0052.jpg",
+  :offset [28 53],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0053.jpg",
+  :offset [42 -49],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0054.jpg",
+  :offset [-11 -29],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0055.jpg",
+  :offset [31 -17],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0056.jpg",
+  :offset [-18 -22],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0057.jpg",
+  :offset [-48 -44],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0058.jpg",
+  :offset [37 -25],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0059.jpg",
+  :offset [-59 34],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0060.jpg",
+  :offset [-64 -3],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0061.jpg",
+  :offset [-28 -42],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0062.jpg",
+  :offset [28 -41],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0063.jpg",
+  :offset [17 -52],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0064.jpg",
+  :offset [-46 63],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0065.jpg",
+  :offset [-19 -28],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0066.jpg",
+  :offset [-49 40],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0067.jpg",
+  :offset [62 -2],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0068.jpg",
+  :offset [-40 -1],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0069.jpg",
+  :offset [52 59],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0070.jpg",
+  :offset [-68 -63],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0071.jpg",
+  :offset [34 -43],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0072.jpg",
+  :offset [-4 -35],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0073.jpg",
+  :offset [-46 -5],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0074.jpg",
+  :offset [-23 -2],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0075.jpg",
+  :offset [-3 -42],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0076.jpg",
+  :offset [-40 10],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0077.jpg",
+  :offset [23 19],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0078.jpg",
+  :offset [22 24],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0079.jpg",
+  :offset [30 23],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0080.jpg",
+  :offset [-49 10],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0081.jpg",
+  :offset [25 44],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0082.jpg",
+  :offset [65 16],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0083.jpg",
+  :offset [57 24],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0084.jpg",
+  :offset [23 55],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0085.jpg",
+  :offset [38 69],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0086.jpg",
+  :offset [15 -11],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0087.jpg",
+  :offset [40 15],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0088.jpg",
+  :offset [-21 -6],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0089.jpg",
+  :offset [21 -54],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0090.jpg",
+  :offset [53 -50],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0091.jpg",
+  :offset [-3 -34],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0092.jpg",
+  :offset [24 -35],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0093.jpg",
+  :offset [-43 61],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0094.jpg",
+  :offset [-24 69],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0095.jpg",
+  :offset [69 27],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0096.jpg",
+  :offset [64 -30],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0097.jpg",
+  :offset [-54 13],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0098.jpg",
+  :offset [66 -32],
+  :home [0 0 400]}
+ {:image "2025-07-23_12-47-24_sample_0099.jpg", :offset [48 -4]
+  :home [0 0 400]}
+ {:image "2025-07-23_13-21-01_sample_0000.jpg",
+  :offset [49 -29],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-21-01_sample_0001.jpg",
+  :offset [-10 -39],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-21-01_sample_0002.jpg",
+  :offset [8 39],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-21-01_sample_0003.jpg",
+  :offset [36 -7],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-21-01_sample_0004.jpg",
+  :offset [-36 39],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-21-01_sample_0005.jpg",
+  :offset [-45 25],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-21-01_sample_0006.jpg",
+  :offset [6 -1],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-21-01_sample_0007.jpg",
+  :offset [25 -3],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-21-01_sample_0008.jpg",
+  :offset [-24 10],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-21-01_sample_0009.jpg",
+  :offset [-29 -42],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-27-04_sample_0000.jpg",
+  :offset [24 -49],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-27-04_sample_0001.jpg",
+  :offset [37 -23],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-27-04_sample_0002.jpg",
+  :offset [-25 -22],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-27-04_sample_0003.jpg",
+  :offset [22 27],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-27-04_sample_0004.jpg",
+  :offset [6 -32],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-27-04_sample_0005.jpg",
+  :offset [-3 39],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-27-04_sample_0006.jpg",
+  :offset [-7 -21],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-27-04_sample_0007.jpg",
+  :offset [-42 39],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-27-04_sample_0008.jpg",
+  :offset [-12 -31],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-27-04_sample_0009.jpg",
+  :offset [-11 -16],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0000.jpg",
+  :offset [-16 -35],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0001.jpg",
+  :offset [-10 -13],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0002.jpg",
+  :offset [-7 15],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0003.jpg",
+  :offset [-21 -9],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0004.jpg",
+  :offset [-27 5],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0005.jpg",
+  :offset [16 30],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0006.jpg",
+  :offset [39 7],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0007.jpg",
+  :offset [-11 30],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0008.jpg",
+  :offset [-23 9],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0009.jpg",
+  :offset [25 25],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0010.jpg",
+  :offset [-27 17],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0011.jpg",
+  :offset [2 32],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0012.jpg",
+  :offset [27 3],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0013.jpg",
+  :offset [-37 35],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0014.jpg",
+  :offset [4 29],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0015.jpg",
+  :offset [-15 2],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0016.jpg",
+  :offset [-6 19],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0017.jpg",
+  :offset [-19 -14],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0018.jpg",
+  :offset [11 -1],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0019.jpg",
+  :offset [39 -38],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0020.jpg",
+  :offset [36 -33],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0021.jpg",
+  :offset [2 -39],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0022.jpg",
+  :offset [2 11],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0023.jpg",
+  :offset [-39 2],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0024.jpg",
+  :offset [20 -1],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0025.jpg",
+  :offset [-20 2],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0026.jpg",
+  :offset [-29 31],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0027.jpg",
+  :offset [18 8],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0028.jpg",
+  :offset [-8 -32],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0029.jpg",
+  :offset [-39 -24],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0030.jpg",
+  :offset [12 24],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0031.jpg",
+  :offset [-22 3],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0032.jpg",
+  :offset [-33 15],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0033.jpg",
+  :offset [34 -35],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0034.jpg",
+  :offset [-35 14],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0035.jpg",
+  :offset [9 12],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0036.jpg",
+  :offset [-22 -17],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0037.jpg",
+  :offset [-24 18],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0038.jpg",
+  :offset [-27 9],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0039.jpg",
+  :offset [6 10],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0040.jpg",
+  :offset [37 35],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0041.jpg",
+  :offset [1 -6],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0042.jpg",
+  :offset [-1 -35],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0043.jpg",
+  :offset [-1 14],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0044.jpg",
+  :offset [36 -17],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0045.jpg",
+  :offset [-36 -15],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0046.jpg",
+  :offset [28 6],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0047.jpg",
+  :offset [13 -10],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0048.jpg",
+  :offset [-7 -11],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0049.jpg",
+  :offset [-4 -3],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0050.jpg",
+  :offset [1 -7],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0051.jpg",
+  :offset [13 -34],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0052.jpg",
+  :offset [0 15],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0053.jpg",
+  :offset [-34 -11],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0054.jpg",
+  :offset [-16 30],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0055.jpg",
+  :offset [-5 -8],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0056.jpg",
+  :offset [-5 8],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0057.jpg",
+  :offset [-13 25],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0058.jpg",
+  :offset [37 -38],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0059.jpg",
+  :offset [37 -11],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0060.jpg",
+  :offset [32 3],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0061.jpg",
+  :offset [26 -9],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0062.jpg",
+  :offset [19 30],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0063.jpg",
+  :offset [4 24],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0064.jpg",
+  :offset [18 -1],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0065.jpg",
+  :offset [8 -39],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0066.jpg",
+  :offset [34 -31],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0067.jpg",
+  :offset [37 -2],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0068.jpg",
+  :offset [12 35],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0069.jpg",
+  :offset [-32 -17],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0070.jpg",
+  :offset [29 -15],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0071.jpg",
+  :offset [-31 34],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0072.jpg",
+  :offset [-34 -35],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0073.jpg",
+  :offset [-38 3],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0074.jpg",
+  :offset [9 20],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0075.jpg",
+  :offset [27 20],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0076.jpg",
+  :offset [24 39],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0077.jpg",
+  :offset [7 30],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0078.jpg",
+  :offset [-13 9],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0079.jpg",
+  :offset [-20 -22],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0080.jpg",
+  :offset [-34 -20],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0081.jpg",
+  :offset [30 1],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0082.jpg",
+  :offset [-34 -31],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0083.jpg",
+  :offset [-10 -28],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0084.jpg",
+  :offset [22 28],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0085.jpg",
+  :offset [-32 -15],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0086.jpg",
+  :offset [-10 17],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0087.jpg",
+  :offset [-22 -3],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0088.jpg",
+  :offset [-10 19],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0089.jpg",
+  :offset [-34 -12],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0090.jpg",
+  :offset [-23 9],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0091.jpg",
+  :offset [10 -35],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0092.jpg",
+  :offset [31 -25],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0093.jpg",
+  :offset [-25 18],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0094.jpg",
+  :offset [25 -32],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0095.jpg",
+  :offset [-21 22],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0096.jpg",
+  :offset [-22 19],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0097.jpg",
+  :offset [23 -34],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0098.jpg",
+  :offset [10 -6],
+  :home [10 0 350]}
+ {:image "2025-07-23_13-48-27_sample_0099.jpg",
+  :offset [17 -10],
+  :home [10 0 350]}
+ {:image "2025-07-23_14-02-39_sample_0000.jpg",
+  :offset [36 -24],
+  :home [10 0 350]}
+ {:image "2025-07-23_14-02-39_sample_0001.jpg",
+  :offset [36 4],
+  :home [10 0 350]}
+ {:image "2025-07-23_14-02-39_sample_0002.jpg",
+  :offset [18 -33],
+  :home [10 0 350]}
+ {:image "2025-07-23_14-02-39_sample_0003.jpg",
+  :offset [2 9],
+  :home [10 0 350]}
+ {:image "2025-07-23_14-02-39_sample_0004.jpg",
+  :offset [-33 -34],
+  :home [10 0 350]}
+ {:image "2025-07-23_14-02-39_sample_0005.jpg",
+  :offset [13 38],
+  :home [10 0 350]}
+ {:image "2025-07-23_14-02-39_sample_0006.jpg",
+  :offset [-2 -18],
+  :home [10 0 350]}
+ {:image "2025-07-23_14-02-39_sample_0007.jpg",
+  :offset [-21 16],
+  :home [10 0 350]}
+ {:image "2025-07-23_14-02-39_sample_0008.jpg",
+  :offset [6 -40],
+  :home [10 0 350]}
+ {:image "2025-07-23_14-02-39_sample_0009.jpg",
+  :offset [24 3],
+  :home [10 0 350]}
+ {:image "2025-07-23_14-04-24_sample_0000.jpg",
+  :offset [38 -9],
+  :home [20 0 350]}
+ {:image "2025-07-23_14-04-24_sample_0001.jpg",
+  :offset [0 -11],
+  :home [20 0 350]}
+ {:image "2025-07-23_14-04-24_sample_0002.jpg",
+  :offset [38 27],
+  :home [20 0 350]}
+ {:image "2025-07-23_14-04-24_sample_0003.jpg",
+  :offset [-7 -3],
+  :home [20 0 350]}
+ {:image "2025-07-23_14-04-24_sample_0004.jpg",
+  :offset [-22 14],
+  :home [20 0 350]}
+ {:image "2025-07-23_14-04-24_sample_0005.jpg",
+  :offset [-2 1],
+  :home [20 0 350]}
+ {:image "2025-07-23_14-04-24_sample_0006.jpg",
+  :offset [-2 28],
+  :home [20 0 350]}
+ {:image "2025-07-23_14-04-24_sample_0007.jpg",
+  :offset [2 -22],
+  :home [20 0 350]}
+ {:image "2025-07-23_14-04-24_sample_0008.jpg",
+  :offset [30 -3],
+  :home [20 0 350]}
+ {:image "2025-07-23_14-04-24_sample_0009.jpg",
+  :offset [-39 29],
+  :home [20 0 350]}
+ {:image "2025-07-23_14-07-06_sample_0000.jpg",
+  :offset [-9 28],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-07-06_sample_0001.jpg",
+  :offset [34 -30],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-07-06_sample_0002.jpg",
+  :offset [-21 -27],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-07-06_sample_0003.jpg",
+  :offset [28 -12],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-07-06_sample_0004.jpg",
+  :offset [8 13],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-07-06_sample_0005.jpg",
+  :offset [26 0],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-07-06_sample_0006.jpg",
+  :offset [-9 -10],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-07-06_sample_0007.jpg",
+  :offset [-22 12],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-07-06_sample_0008.jpg",
+  :offset [39 10],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-07-06_sample_0009.jpg",
+  :offset [-10 9],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-08-36_sample_0000.jpg",
+  :offset [-5 -40],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-08-36_sample_0001.jpg",
+  :offset [19 5],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-08-36_sample_0002.jpg",
+  :offset [15 -36],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-08-36_sample_0003.jpg",
+  :offset [9 10],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-08-36_sample_0004.jpg",
+  :offset [-27 -28],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-08-36_sample_0005.jpg",
+  :offset [-22 -35],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-08-36_sample_0006.jpg",
+  :offset [34 23],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-08-36_sample_0007.jpg",
+  :offset [12 -17],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-08-36_sample_0008.jpg",
+  :offset [34 -14],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-08-36_sample_0009.jpg",
+  :offset [-12 16],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-12-26_sample_0000.jpg",
+  :offset [-13 25],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-12-26_sample_0001.jpg",
+  :offset [-18 -22],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-12-26_sample_0002.jpg",
+  :offset [3 -37],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-12-26_sample_0003.jpg",
+  :offset [-3 33],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-12-26_sample_0004.jpg",
+  :offset [15 34],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-12-26_sample_0005.jpg",
+  :offset [-22 21],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-12-26_sample_0006.jpg",
+  :offset [-23 2],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-12-26_sample_0007.jpg",
+  :offset [-27 -34],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-12-26_sample_0008.jpg",
+  :offset [-28 -22],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-12-26_sample_0009.jpg",
+  :offset [29 -5],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-14-31_sample_0000.jpg",
+  :offset [-10 -40],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-14-31_sample_0001.jpg",
+  :offset [19 18],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-14-31_sample_0002.jpg",
+  :offset [23 -18],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-14-31_sample_0003.jpg",
+  :offset [-11 -8],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-14-31_sample_0004.jpg",
+  :offset [12 -15],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-14-31_sample_0005.jpg",
+  :offset [14 -29],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-14-31_sample_0006.jpg",
+  :offset [-26 -5],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-14-31_sample_0007.jpg",
+  :offset [-6 10],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-14-31_sample_0008.jpg",
+  :offset [12 8],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-14-31_sample_0009.jpg",
+  :offset [-37 -23],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-16-33_sample_0000.jpg",
+  :offset [-2 37],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-16-33_sample_0001.jpg",
+  :offset [-3 4],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-16-33_sample_0002.jpg",
+  :offset [20 33],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-16-33_sample_0003.jpg",
+  :offset [-14 -8],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-16-33_sample_0004.jpg",
+  :offset [-3 -3],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-16-33_sample_0005.jpg",
+  :offset [23 -38],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-16-33_sample_0006.jpg",
+  :offset [-26 -31],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-16-33_sample_0007.jpg",
+  :offset [18 -33],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-16-33_sample_0008.jpg",
+  :offset [31 -10],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-16-33_sample_0009.jpg",
+  :offset [3 -29],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-19-18_sample_0000.jpg",
+  :offset [3 34],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-19-18_sample_0001.jpg",
+  :offset [11 25],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-19-18_sample_0002.jpg",
+  :offset [6 -36],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-19-18_sample_0003.jpg",
+  :offset [16 -30],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-19-18_sample_0004.jpg",
+  :offset [-36 20],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-19-18_sample_0005.jpg",
+  :offset [20 -15],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-19-18_sample_0006.jpg",
+  :offset [-15 30],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-19-18_sample_0007.jpg",
+  :offset [8 0],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-19-18_sample_0008.jpg",
+  :offset [15 -33],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-19-18_sample_0009.jpg",
+  :offset [-24 1],
+  :home [20 20 350]}
+ {:image "2025-07-23_14-21-28_sample_0000.jpg",
+  :offset [-12 1],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-21-28_sample_0001.jpg",
+  :offset [11 -10],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-21-28_sample_0002.jpg",
+  :offset [-6 3],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-21-28_sample_0003.jpg",
+  :offset [-27 -34],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-21-28_sample_0004.jpg",
+  :offset [22 -26],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-21-28_sample_0005.jpg",
+  :offset [-13 -12],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-21-28_sample_0006.jpg",
+  :offset [39 34],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-21-28_sample_0007.jpg",
+  :offset [35 -34],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-21-28_sample_0008.jpg",
+  :offset [37 -18],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-21-28_sample_0009.jpg",
+  :offset [26 17],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-23-30_sample_0000.jpg",
+  :offset [-32 -13],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-23-30_sample_0001.jpg",
+  :offset [26 -2],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-23-30_sample_0002.jpg",
+  :offset [-29 34],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-23-30_sample_0003.jpg",
+  :offset [9 30],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-23-30_sample_0004.jpg",
+  :offset [-22 4],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-23-30_sample_0005.jpg",
+  :offset [21 -23],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-23-30_sample_0006.jpg",
+  :offset [-36 -9],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-23-30_sample_0007.jpg",
+  :offset [37 -21],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-23-30_sample_0008.jpg",
+  :offset [34 -28],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-23-30_sample_0009.jpg",
+  :offset [-39 -40],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-25-30_sample_0000.jpg",
+  :offset [-9 -23],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-25-30_sample_0001.jpg",
+  :offset [19 25],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-25-30_sample_0002.jpg",
+  :offset [-9 -25],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-25-30_sample_0003.jpg",
+  :offset [24 36],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-25-30_sample_0004.jpg",
+  :offset [-16 39],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-25-30_sample_0005.jpg",
+  :offset [3 36],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-25-30_sample_0006.jpg",
+  :offset [25 -9],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-25-30_sample_0007.jpg",
+  :offset [27 -38],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-25-30_sample_0008.jpg",
+  :offset [-38 -12],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-25-30_sample_0009.jpg",
+  :offset [37 -40],
+  :home [20 30 350]}
+ {:image "2025-07-23_14-27-15_sample_0000.jpg",
+  :offset [-13 -5],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-27-15_sample_0001.jpg",
+  :offset [-1 -31],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-27-15_sample_0002.jpg",
+  :offset [-19 -31],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-27-15_sample_0003.jpg",
+  :offset [-5 14],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-27-15_sample_0004.jpg",
+  :offset [38 -13],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-27-15_sample_0005.jpg",
+  :offset [-26 27],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-27-15_sample_0006.jpg",
+  :offset [-33 35],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-27-15_sample_0007.jpg",
+  :offset [-8 0],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-27-15_sample_0008.jpg",
+  :offset [-12 -22],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-27-15_sample_0009.jpg",
+  :offset [-16 9],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-29-06_sample_0000.jpg",
+  :offset [7 36],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-29-06_sample_0001.jpg",
+  :offset [17 -30],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-29-06_sample_0002.jpg",
+  :offset [-14 19],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-29-06_sample_0003.jpg",
+  :offset [36 -34],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-29-06_sample_0004.jpg",
+  :offset [30 -2],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-29-06_sample_0005.jpg",
+  :offset [-10 4],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-29-06_sample_0006.jpg",
+  :offset [36 -33],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-29-06_sample_0007.jpg",
+  :offset [-18 28],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-29-06_sample_0008.jpg",
+  :offset [-12 -9],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-29-06_sample_0009.jpg",
+  :offset [-23 6],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-31-01_sample_0000.jpg",
+  :offset [-1 -12],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-31-01_sample_0001.jpg",
+  :offset [-19 -36],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-31-01_sample_0002.jpg",
+  :offset [-29 -1],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-31-01_sample_0003.jpg",
+  :offset [7 -14],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-31-01_sample_0004.jpg",
+  :offset [-29 -4],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-31-01_sample_0005.jpg",
+  :offset [0 26],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-31-01_sample_0006.jpg",
+  :offset [-11 5],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-31-01_sample_0007.jpg",
+  :offset [-27 -10],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-31-01_sample_0008.jpg",
+  :offset [-2 19],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-31-01_sample_0009.jpg",
+  :offset [-34 12],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-33-01_sample_0000.jpg",
+  :offset [28 2],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-33-01_sample_0001.jpg",
+  :offset [36 1],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-33-01_sample_0002.jpg",
+  :offset [-28 24],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-33-01_sample_0003.jpg",
+  :offset [6 -1],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-33-01_sample_0004.jpg",
+  :offset [38 16],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-33-01_sample_0005.jpg",
+  :offset [-12 15],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-33-01_sample_0006.jpg",
+  :offset [-37 38],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-33-01_sample_0007.jpg",
+  :offset [35 -17],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-33-01_sample_0008.jpg",
+  :offset [32 20],
+  :home [30 30 350]}
+ {:image "2025-07-23_14-33-01_sample_0009.jpg",
+  :offset [36 -19],
+  :home [30 30 350]}]

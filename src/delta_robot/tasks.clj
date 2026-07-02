@@ -181,6 +181,7 @@
       (motion/home)
       (println "Moving to intermediate safe height.")
       (motion/move-to 0 0 300)
+      (Thread/sleep 1000)
       (println "Moving to data collection start position.")
       (motion/move-to (:home-x config) (:home-y config) (:z-height config))
 

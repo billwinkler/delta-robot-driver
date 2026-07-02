@@ -1,6 +1,0 @@
-(ns test-home
-  (:require [delta-robot.motion :as move]))
-
-(move/home)
-
-
