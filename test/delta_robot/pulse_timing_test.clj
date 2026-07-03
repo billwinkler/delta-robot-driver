@@ -53,6 +53,11 @@
     (is (zero? (edge-count chunks 18 :off)))
     (is (= 5 (edge-count chunks 19 :on)))))
 
+(deftest chunks-fit-pigs-arg-limit
+  (testing "pigs parses at most 512 command-line params; each pulse is 3
+    numbers (bench-verified on the Pi: 256-pulse chunks fail wvag)"
+    (is (<= (* 3 timing/max-pulses-per-waveform) 510))))
+
 (deftest delays-are-positive
   (testing "pigpiod rejects zero-delay pulses; every emitted pulse must wait"
     (let [chunks (timing/generate-pulse-chunks [500 501 502] pins)]

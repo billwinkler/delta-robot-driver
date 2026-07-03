@@ -25,12 +25,15 @@
   500)
 
 (def max-pulses-per-waveform
-  "The maximum number of pulses per chunk. With streamed transmission at
-  most two chunks are alive at once (playing + queued), so CB usage is
-  bounded at roughly 2 * this * ~2 CBs/pulse — far inside pigpiod's
-  pool. Larger chunks also widen the timing margin: a chunk plays for
-  ~(chunk/2) ms while the next one is created via a few pigs calls."
-  256)
+  "The maximum number of pulses per chunk. Two constraints:
+  - pigs parses at most 512 command-line parameters, and each pulse is
+    3 numbers, so a chunk must stay under ~170 pulses (bench-verified:
+    256 pulses => 768 args => 'wvag: bad parameter').
+  - With streamed transmission at most two chunks are alive at once
+    (playing + queued), so CB usage is bounded at ~2 * this * ~2
+    CBs/pulse — far inside pigpiod's pool. A chunk plays for ~(chunk/2)
+    ms, the margin during which the next chunk is created and queued."
+  150)
 
 ;; --- Core Pulse Generation ---
 
