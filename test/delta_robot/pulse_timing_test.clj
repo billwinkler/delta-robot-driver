@@ -27,12 +27,39 @@
         (doseq [[s p] (map vector steps pins)]
           (is (= s (edge-count chunks p :on)) (str "on-edges pin " p))
           (is (= s (edge-count chunks p :off)) (str "off-edges pin " p))))
-      (testing "total duration is max-steps * (high + low)"
-        (is (= (* 502 (+ timing/high-pulse-us timing/min-low-pulse-us))
-               (total-delay-us chunks))))
+      (testing "total duration: at least the flat-cruise time, plus ramp overhead"
+        (let [cruise-time (* 502 1000)] ; 1kHz cruise
+          (is (>= (total-delay-us chunks) cruise-time))
+          (is (< (total-delay-us chunks) (* 2 cruise-time)))))
       (testing "every chunk is bounded (CB budget)"
         (doseq [chunk chunks]
           (is (<= (count chunk) timing/max-pulses-per-waveform)))))))
+
+(defn- busiest-step-periods
+  "Reconstructs the busiest pin's step periods (us between consecutive
+  rising edges) from the emitted pulses."
+  [chunks pin]
+  (let [pulses (apply concat chunks)
+        times (reductions + 0 (map #(nth % 2) pulses))
+        rising (keep-indexed (fn [i [on _ _]]
+                               (when (bit-test on pin) (nth times i)))
+                             pulses)]
+    (map - (rest rising) rising)))
+
+(deftest trapezoid-ramp-shapes-the-profile
+  (testing "moves accelerate from min-frequency and cruise at 1kHz —
+    cold starts at full speed shed steps (55-70mm audit drift)"
+    (let [steps [800 800 800]
+          chunks (timing/generate-pulse-chunks steps pins)
+          periods (busiest-step-periods chunks 17)
+          first-p (first periods)
+          mid-p (nth periods 400)
+          last-p (last periods)]
+      (is (> first-p 1800) "first step near min-frequency (500Hz ~= 2000us)")
+      (is (< 950 mid-p 1050) "cruise near 1kHz (~1000us)")
+      (is (> last-p 1800) "decelerates back toward min-frequency")
+      (is (apply >= (take 50 periods))
+          "acceleration is monotonic (periods shrink)"))))
 
 (deftest large-gcd-move-still-complete
   (testing "steps sharing a large gcd — previously the wvcha loop case"
@@ -40,8 +67,8 @@
           chunks (timing/generate-pulse-chunks steps pins)]
       (doseq [[s p] (map vector steps pins)]
         (is (= s (edge-count chunks p :on)) (str "on-edges pin " p)))
-      (is (= (* 1000 (+ timing/high-pulse-us timing/min-low-pulse-us))
-             (total-delay-us chunks))))))
+      (is (>= (total-delay-us chunks) (* 1000 1000))
+          "at least the 1kHz-cruise duration"))))
 
 (deftest zero-movement-yields-no-chunks
   (is (empty? (timing/generate-pulse-chunks [0 0 0] pins))))

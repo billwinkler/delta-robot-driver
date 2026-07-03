@@ -1,6 +1,9 @@
 (ns delta-robot.command-driver
-  "Drives the steppers through pigpiod via the pigs CLI, streaming each
-  move as a sequence of small waveforms (wvtxm one-shot-sync ping-pong).
+  "Drives the steppers through pigpiod via the pigs CLI. Every physical
+  transmission is ONE seamless wvcha chain (single gentle-ramp start and
+  stop); moves too large for the CB budget are split at the midpoint
+  into sequential chained moves rather than streamed — per-chunk
+  restarts shed steps (2026-07-03 hangar audits: 55-70mm drift/50 moves).
 
   send-commands is SYNCHRONOUS: it returns only after the move finishes
   (or aborts on a limit switch), and every wave it created has been
@@ -99,22 +102,6 @@
   (clear-waveforms)
   :aborted)
 
-(defn- wait-until-playing
-  "Polls until the queued wave `wid` starts playing (i.e. its predecessor
-  finished), checking limit switches. Returns :ok, :done (transmission
-  already past wid), or :limit."
-  [wid commands]
-  (loop []
-    (if (limit-triggered? commands)
-      :limit
-      (let [at (execute-pigs-cmd "wvtat")]
-        (cond
-          (= at (str wid)) :ok
-          ;; 9999 = no wave transmitting: we were slow and the whole
-          ;; queue drained. 9998 = transmitted wave was deleted.
-          (contains? #{"9999" "9998"} at) :done
-          :else (do (Thread/sleep 2) (recur)))))))
-
 (defn- final-wait
   "Blocks until transmission finishes, checking limit switches.
   Returns :ok or :limit."
@@ -124,29 +111,6 @@
       (limit-triggered? commands) :limit
       (not= "1" (execute-pigs-cmd "wvbsy")) :ok
       :else (do (Thread/sleep 2) (recur)))))
-
-(defn- stream-chunks!
-  "Streams pulse chunks through pigpiod: at most two waves are alive at a
-  time (playing + queued via one-shot-sync). Deletes each wave once its
-  successor is playing. Returns :ok or :aborted."
-  [chunks commands]
-  (clear-waveforms)
-  (let [first-wid (create-wave! (first chunks))]
-    (execute-pigs-cmd "wvtxm" (str first-wid) "0") ; one-shot: start now
-    (loop [prev-wid first-wid
-           remaining (rest chunks)]
-      (if (seq remaining)
-        (let [wid (create-wave! (first remaining))]
-          (execute-pigs-cmd "wvtxm" (str wid) "2") ; one-shot-sync: queue
-          (case (wait-until-playing wid commands)
-            :limit (abort! "limit switch triggered")
-            (do (execute-pigs-cmd "wvdel" (str prev-wid))
-                (recur wid (rest remaining)))))
-        ;; last wave queued/playing — drain and clean up
-        (case (final-wait commands)
-          :limit (abort! "limit switch triggered")
-          (do (execute-pigs-cmd "wvdel" (str prev-wid))
-              :ok))))))
 
 (def max-chain-pulses
   "Moves up to this many total pulses are pre-built and played as ONE
@@ -203,17 +167,31 @@
     (log/info "Generating pulse chunks for steps:" step-counts "on pins:" step-pins)
     (let [chunks (timing/generate-pulse-chunks step-counts step-pins)
           total-pulses (reduce + 0 (map count chunks))]
-      (if (seq chunks)
-        (let [chained? (<= total-pulses max-chain-pulses)
-              result (if chained?
-                       (chain-chunks! chunks checked-commands)
-                       (stream-chunks! chunks checked-commands))]
-          (log/infof "Move finished: %s (%d chunks, %d pulses, %s)"
-                     result (count chunks) total-pulses
-                     (if chained? "chained" "streamed"))
-          result)
+      (cond
+        (empty? chunks)
         (do (log/info "No movement required (zero pulses or empty waveform).")
-            :ok)))))
+            :ok)
+
+        (<= total-pulses max-chain-pulses)
+        (let [result (chain-chunks! chunks checked-commands)]
+          (log/infof "Move finished: %s (%d chunks, %d pulses, chained)"
+                     result (count chunks) total-pulses)
+          result)
+
+        :else
+        ;; Too big for one chain: split at the midpoint into two
+        ;; sequential chained moves (each with its own gentle ramp).
+        ;; Motors halve proportionally, so the joint-space path is
+        ;; unchanged; the move pauses briefly at the midpoint.
+        (let [halve (fn [f]
+                      (into {} (map (fn [[m c]]
+                                      [m (update c :total-pulses f)])
+                                    checked-commands)))
+              _ (log/infof "Move of %d pulses exceeds chain budget — splitting" total-pulses)
+              r1 (send-commands (halve #(quot % 2)))]
+          (if (= :ok r1)
+            (send-commands (halve #(- % (quot % 2))))
+            r1))))))
 
 ;; --- Homing ---
 

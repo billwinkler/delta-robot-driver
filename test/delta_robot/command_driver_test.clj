@@ -61,34 +61,20 @@
 
 (defn- cmds-of [calls cmd] (filter #(= cmd (first %)) @calls))
 
-(deftest long-move-bounded-live-waves
-  (testing "a long gcd=1 move never holds more than 2 waves alive"
-    (let [{:keys [fn state]} (make-fake-pigs)]
-      (with-redefs [cd/execute-pigs-cmd fn]
-        (let [result (cd/send-commands {0 {:total-pulses 1500 :direction 0}
-                                        1 {:total-pulses 1501 :direction 0}
-                                        2 {:total-pulses 1502 :direction 0}})]
+(deftest giant-move-splits-into-sequential-chains
+  (testing "a move over the chain budget splits at the midpoint: two
+    seamless chains, never streaming, bounded live waves"
+    (let [{fake :fn :keys [calls state]} (make-fake-pigs)]
+      (with-redefs [cd/execute-pigs-cmd fake]
+        (let [result (cd/send-commands {0 {:total-pulses 5000 :direction 0}
+                                        1 {:total-pulses 5001 :direction 0}
+                                        2 {:total-pulses 5002 :direction 0}})]
           (is (= :ok result))
-          (is (<= (:max-alive @state) 2)
-              "CB budget: at most playing + queued waves exist at once")
-          (is (empty? (:alive @state))
-              "all waves deleted before send-commands returns")
-          (is (nil? (:queued @state))))))))
-
-(deftest every-created-wave-transmitted-in-order
-  (testing "chunks are created and queued in sequence: first oneshot, rest sync"
-    (let [{:keys [fn calls]} (make-fake-pigs)]
-      (with-redefs [cd/execute-pigs-cmd fn]
-        (cd/send-commands {0 {:total-pulses 1500 :direction 0}
-                           1 {:total-pulses 1501 :direction 0}
-                           2 {:total-pulses 1502 :direction 0}})
-        (let [txs (cmds-of calls "wvtxm")
-              modes (map #(nth % 2) txs)]
-          (is (pos? (count txs)))
-          (is (= "0" (first modes)) "first chunk starts immediately (oneshot)")
-          (is (every? #(= "2" %) (rest modes)) "later chunks queue as oneshot-sync")
-          (is (= (count (cmds-of calls "wvcre")) (count txs))
-              "every created wave is transmitted"))))))
+          (is (empty? (cmds-of calls "wvtxm")) "streaming is gone")
+          (is (= 2 (count (cmds-of calls "wvcha"))) "two sequential chains")
+          (is (<= (:max-alive @state) 45)
+              "CB budget: only one half-move's waves alive at once")
+          (is (empty? (:alive @state)) "all waves deleted"))))))
 
 (deftest short-move-single-chunk
   (testing "a move that fits one chunk: create, transmit, wait, delete"
@@ -100,16 +86,19 @@
         (is (= 1 (count (cmds-of calls "wvcre"))))
         (is (empty? (:alive @state)))))))
 
-(deftest limit-switch-aborts-stream
-  (testing "an upward move whose limit trips mid-stream halts and cleans up"
-    ;; guard reads pass (3 reads, one per motor), then reads trip
-    (let [{:keys [fn calls state]} (make-fake-pigs :limit-after 3)]
-      (with-redefs [cd/execute-pigs-cmd fn]
-        (let [result (cd/send-commands {0 {:total-pulses 2000 :direction 1}
-                                        1 {:total-pulses 2001 :direction 1}
-                                        2 {:total-pulses 2002 :direction 1}})]
+(deftest limit-switch-aborts-split-move
+  (testing "an upward giant move whose limit trips during the first half
+    halts, cleans up, and never starts the second half"
+    ;; guard reads pass twice (outer + first-half recursion = 6 reads),
+    ;; then the trip happens during the first half's final-wait
+    (let [{fake :fn :keys [calls state]} (make-fake-pigs :limit-after 6)]
+      (with-redefs [cd/execute-pigs-cmd fake]
+        (let [result (cd/send-commands {0 {:total-pulses 5000 :direction 1}
+                                        1 {:total-pulses 5001 :direction 1}
+                                        2 {:total-pulses 5002 :direction 1}})]
           (is (= :aborted result))
           (is (seq (cmds-of calls "wvhlt")) "waveform halted")
+          (is (= 1 (count (cmds-of calls "wvcha"))) "second half never starts")
           (is (empty? (:alive @state)) "waves cleaned up after abort"))))))
 
 (deftest small-move-plays-one-seamless-chain

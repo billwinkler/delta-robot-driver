@@ -9,20 +9,39 @@
   gcd 1, so the 'base' waveform was the entire move and every chunk had
   to exist simultaneously for the chain, exhausting pigpio's DMA
   control-block pool (~25k CBs) at wvcre ('No more CBs for waveform').
-  Streaming bounds CB usage at ~2 chunks regardless of move length."
-  (:require [delta-robot.config :refer [motor-step-pins]]))
+  Streaming bounds CB usage at ~2 chunks regardless of move length.
+
+  2026-07-03 hangar audits: cold-starting the motors at full step rate
+  sheds steps (~55-70mm dead-reckoning drift over 50 moves). Steps are
+  now timed on a TRAPEZOIDAL velocity profile — accelerate from
+  :min-frequency, cruise, decelerate — using the config parameters
+  that have existed since 2021 but were never honored."
+  (:require [delta-robot.config :as cfg :refer [motor-step-pins]]))
 
 ;; --- Constants ---
 ;; Timings are in integer microseconds, as required by the pigpiod library.
 
-(def high-pulse-us
-  "The duration of the 'high' part of a single motor pulse, in microseconds."
-  500)
+(defn- profile
+  "Velocity-profile parameters from config. Cruise is clamped to 1 kHz
+  (the historical fixed rate) until the arm's dynamics at higher speeds
+  are verified — raise the clamp deliberately, not by accident."
+  []
+  {:min-freq (double (or (:min-frequency cfg/config) 500.0))
+   :max-freq (min 1000.0 (double (or (:max-frequency cfg/config) 1000.0)))
+   :accel    (long (or (:acceleration-pulses cfg/config) 150))})
 
-(def min-low-pulse-us
-  "The minimum duration of the 'low' part of a single motor pulse, in microseconds.
-  This is the duration used by the motor with the most steps."
-  500)
+(defn- step-periods
+  "Per-step periods (us) for S steps under a trapezoidal profile:
+  linear frequency ramp over the accel span, cruise, symmetric ramp
+  down. The accel span shrinks to S/3 for short moves."
+  [S {:keys [min-freq max-freq accel]}]
+  (let [A (max 1 (min accel (quot S 3)))
+        freq (fn [k]
+               (cond
+                 (< k A)        (+ min-freq (* (- max-freq min-freq) (/ (double (inc k)) A)))
+                 (>= k (- S A)) (+ min-freq (* (- max-freq min-freq) (/ (double (- S k)) A)))
+                 :else          max-freq))]
+    (mapv #(/ 1e6 (freq %)) (range S))))
 
 (def max-pulses-per-waveform
   "The maximum number of pulses per chunk. Two constraints:
@@ -49,21 +68,24 @@
   (let [max-steps (apply max step-counts)]
     (if (zero? max-steps)
       []
-      (let [;; Total move time is set by the busiest motor.
-            total-duration-us (* max-steps (+ high-pulse-us min-low-pulse-us))
+      (let [periods (step-periods max-steps (profile))
+            ;; Busiest-motor step start times: cumulative profile time.
+            starts (vec (reductions + 0.0 (pop periods)))
+            total-duration-us (long (Math/ceil (+ (peek starts) (peek periods))))
 
-            ;; Generate all state-change events (pulse start/end).
+            ;; Each motor's step j maps onto the busiest motor's profile
+            ;; at the matching fraction of the move, so all motors
+            ;; accelerate, cruise, and decelerate together.
             all-events (->> (map (fn [steps pin]
                                    (when-not (zero? steps)
-                                     (let [;; Coerce to double to prevent creating a Ratio,
-                                           ;; which Math/round cannot handle.
-                                           step-duration-us (/ (double total-duration-us) steps)]
-                                       (mapcat (fn [i]
-                                                 (let [start-time (* i step-duration-us)
-                                                       high-end-time (+ start-time high-pulse-us)]
-                                                   [[(long (Math/round start-time)) pin :high]
-                                                    [(long (Math/round high-end-time)) pin :low]]))
-                                               (range steps)))))
+                                     (mapcat (fn [j]
+                                               (let [idx (min (dec max-steps)
+                                                              (long (Math/floor (* (+ j 0.5) (/ (double max-steps) steps)))))
+                                                     start (nth starts idx)
+                                                     high-end (+ start (/ (nth periods idx) 2.0))]
+                                                 [[(long (Math/round start)) pin :high]
+                                                  [(long (Math/round high-end)) pin :low]]))
+                                             (range steps))))
                                  step-counts gpio-pins)
                             (apply concat)
                             (sort-by first))
