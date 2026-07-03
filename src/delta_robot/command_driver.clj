@@ -148,6 +148,30 @@
           (do (execute-pigs-cmd "wvdel" (str prev-wid))
               :ok))))))
 
+(def max-chain-pulses
+  "Moves up to this many total pulses are pre-built and played as ONE
+  wvcha chain — a single motor start per move. Streaming (above) starts
+  the motors cold at full step rate at EVERY chunk boundary; with no
+  acceleration ramp those restarts shed steps against the arm's inertia
+  (measured: ~70mm of position drift over 50 moves in the 2026-07-03
+  hangar audit vs the 2025 baseline of 15-40mm per afternoon).
+  CB budget: 2400 pulses * ~3 CBs ~= 7k of pigpiod's ~25k pool."
+  2400)
+
+(defn- chain-chunks!
+  "Pre-creates every chunk's wave and plays them as one seamless wvcha
+  chain. Suitable only for moves within max-chain-pulses. Returns :ok
+  or :aborted."
+  [chunks commands]
+  (clear-waveforms)
+  (let [wids (mapv create-wave! chunks)]
+    (apply execute-pigs-cmd "wvcha" (map str wids))
+    (case (final-wait commands)
+      :limit (abort! "limit switch triggered")
+      (do (doseq [wid wids]
+            (execute-pigs-cmd "wvdel" (str wid)))
+          :ok))))
+
 ;; --- Main Public Function ---
 
 (defn send-commands
@@ -175,10 +199,16 @@
     (set-direction-pins checked-commands)
 
     (log/info "Generating pulse chunks for steps:" step-counts "on pins:" step-pins)
-    (let [chunks (timing/generate-pulse-chunks step-counts step-pins)]
+    (let [chunks (timing/generate-pulse-chunks step-counts step-pins)
+          total-pulses (reduce + 0 (map count chunks))]
       (if (seq chunks)
-        (let [result (stream-chunks! chunks checked-commands)]
-          (log/infof "Move finished: %s (%d chunks)" result (count chunks))
+        (let [chained? (<= total-pulses max-chain-pulses)
+              result (if chained?
+                       (chain-chunks! chunks checked-commands)
+                       (stream-chunks! chunks checked-commands))]
+          (log/infof "Move finished: %s (%d chunks, %d pulses, %s)"
+                     result (count chunks) total-pulses
+                     (if chained? "chained" "streamed"))
           result)
         (do (log/info "No movement required (zero pulses or empty waveform).")
             :ok)))))

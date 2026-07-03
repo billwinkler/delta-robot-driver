@@ -38,6 +38,8 @@
                            (swap! state assoc :playing wid)
                            (swap! state assoc :queued wid))
                          "0")
+               "wvcha" (do (swap! state assoc :playing (Long/parseLong (last args)))
+                           "0")
                ;; each wvtat poll advances the simulation: the playing wave
                ;; finishes and any queued wave starts
                "wvtat" (let [{:keys [playing queued]} @state]
@@ -109,6 +111,36 @@
           (is (= :aborted result))
           (is (seq (cmds-of calls "wvhlt")) "waveform halted")
           (is (empty? (:alive @state)) "waves cleaned up after abort"))))))
+
+(deftest small-move-plays-one-seamless-chain
+  (testing "moves under the chain threshold pre-build all waves and play
+    them as a single wvcha — one motor start per move, no inter-chunk
+    stalls (the 70mm audit-drift bug: per-chunk cold starts lose steps)"
+    (let [{fake :fn :keys [calls state]} (make-fake-pigs)]
+      (with-redefs [cd/execute-pigs-cmd fake]
+        (let [result (cd/send-commands {0 {:total-pulses 300 :direction 0}
+                                        1 {:total-pulses 301 :direction 0}
+                                        2 {:total-pulses 302 :direction 0}})]
+          (is (= :ok result))
+          (is (empty? (cmds-of calls "wvtxm")) "no streaming on small moves")
+          (is (= 1 (count (cmds-of calls "wvcha"))) "exactly one chain")
+          (let [order (map first @calls)
+                cre-idxs (keep-indexed (fn [i c] (when (= c "wvcre") i)) order)
+                cha-idx (first (keep-indexed (fn [i c] (when (= c "wvcha") i)) order))]
+            (is (every? #(< % cha-idx) cre-idxs)
+                "every wave is created before the chain starts"))
+          (is (empty? (:alive @state)) "all waves deleted after the move"))))))
+
+(deftest small-move-chain-limit-abort
+  (testing "a limit trip during a chained move halts and cleans up"
+    (let [{fake :fn :keys [calls state]} (make-fake-pigs :limit-after 3)]
+      (with-redefs [cd/execute-pigs-cmd fake]
+        (let [result (cd/send-commands {0 {:total-pulses 300 :direction 1}
+                                        1 {:total-pulses 301 :direction 1}
+                                        2 {:total-pulses 302 :direction 1}})]
+          (is (= :aborted result))
+          (is (seq (cmds-of calls "wvhlt")))
+          (is (empty? (:alive @state))))))))
 
 (deftest no-movement-is-a-noop
   (let [{:keys [fn calls]} (make-fake-pigs)]
