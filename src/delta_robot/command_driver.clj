@@ -155,8 +155,10 @@
   acceleration ramp those restarts shed steps against the arm's inertia
   (measured: ~70mm of position drift over 50 moves in the 2026-07-03
   hangar audit vs the 2025 baseline of 15-40mm per afternoon).
-  CB budget: 2400 pulses * ~3 CBs ~= 7k of pigpiod's ~25k pool."
-  2400)
+  CB budget: 6000 pulses * ~2 CBs ~= 12k of pigpiod's ~25k pool —
+  half the observed ceiling (the ~19k-CB repro failed at wvcre).
+  Covers every workspace hop; only cross-workspace descents stream."
+  6000)
 
 (defn- chain-chunks!
   "Pre-creates every chunk's wave and plays them as one seamless wvcha

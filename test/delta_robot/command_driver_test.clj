@@ -65,9 +65,9 @@
   (testing "a long gcd=1 move never holds more than 2 waves alive"
     (let [{:keys [fn state]} (make-fake-pigs)]
       (with-redefs [cd/execute-pigs-cmd fn]
-        (let [result (cd/send-commands {0 {:total-pulses 500 :direction 0}
-                                        1 {:total-pulses 501 :direction 0}
-                                        2 {:total-pulses 502 :direction 0}})]
+        (let [result (cd/send-commands {0 {:total-pulses 1500 :direction 0}
+                                        1 {:total-pulses 1501 :direction 0}
+                                        2 {:total-pulses 1502 :direction 0}})]
           (is (= :ok result))
           (is (<= (:max-alive @state) 2)
               "CB budget: at most playing + queued waves exist at once")
@@ -79,9 +79,9 @@
   (testing "chunks are created and queued in sequence: first oneshot, rest sync"
     (let [{:keys [fn calls]} (make-fake-pigs)]
       (with-redefs [cd/execute-pigs-cmd fn]
-        (cd/send-commands {0 {:total-pulses 500 :direction 0}
-                           1 {:total-pulses 501 :direction 0}
-                           2 {:total-pulses 502 :direction 0}})
+        (cd/send-commands {0 {:total-pulses 1500 :direction 0}
+                           1 {:total-pulses 1501 :direction 0}
+                           2 {:total-pulses 1502 :direction 0}})
         (let [txs (cmds-of calls "wvtxm")
               modes (map #(nth % 2) txs)]
           (is (pos? (count txs)))
