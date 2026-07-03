@@ -39,6 +39,13 @@ def start_camera():
     picam.configure(config)
     picam.start()
 
+    # This stack defaults ScalerCrop to a small center region (digital
+    # zoom) — the 2025 scripts all set it to the full sensor explicitly.
+    try:
+        picam.set_controls({"ScalerCrop": (0, 0, 2592, 1944)})
+    except Exception as e:
+        print(f"ScalerCrop failed: {e}", flush=True)
+
     # Exposure lock is NOT possible with this venv's picamera2 against
     # the system libcamera (any exposure control — AeEnable or a direct
     # ExposureTime — trips a missing ExposureTimeMode symbol inside the
