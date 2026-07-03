@@ -1,4 +1,16 @@
 (ns delta-robot.command-driver
+  "Drives the steppers through pigpiod via the pigs CLI, streaming each
+  move as a sequence of small waveforms (wvtxm one-shot-sync ping-pong).
+
+  send-commands is SYNCHRONOUS: it returns only after the move finishes
+  (or aborts on a limit switch), and every wave it created has been
+  deleted. This fixes two bugs in the previous design:
+  1. CB exhaustion — the old wvcha chain needed every chunk alive at
+     once; gcd=1 moves exhausted pigpio's DMA control-block pool at
+     wvcre. Streaming keeps at most 2 waves alive (playing + queued).
+  2. Deletion race — a fire-and-forget future deleted wave ids after
+     transmission, racing the next move's wvcre (which re-uses ids
+     0,1,2...). No background deletion exists any more."
   (:require [babashka.process :refer [sh]]
             [clojure.string :as str]
             [clojure.tools.logging :as log]
@@ -7,18 +19,13 @@
 
 ;; --- Utility Functions ---
 
-(defn- execute-pigs-cmd
+(defn execute-pigs-cmd
   "Executes a pigpio command via the 'pigs' utility and returns trimmed output."
   [& args]
-  ;; (if (> (count args) 15)
-  ;;   (log/info "cmd: pigs" (str/join " " (take 15 args)) "...")
-  ;;   (log/info "cmd: pigs" (str/join " " args)))
   (try
     (let [{:keys [out err exit]} (apply sh "pigs" args)]
       (if (zero? exit)
-        (let [result (str/trim out)]
-;;          (log/info "pigs result:" result)
-          result)
+        (str/trim out)
         (do
           (log/errorf "Failed to execute pigs command %s: exit code %d, error: %s" args exit err)
           (throw (ex-info (str "pigpio command failed: " err) {:command args :exit exit :error err})))))
@@ -26,7 +33,11 @@
       (log/errorf "Exception executing pigs command %s: %s" args (.getMessage e))
       (throw e))))
 
-(defn busy-wait []
+(defn busy-wait
+  "Blocks until no waveform is being transmitted. send-commands is now
+  synchronous, so this returns immediately after it — kept for callers
+  (motion.clj) and as a safety net."
+  []
   (while (= "1" (execute-pigs-cmd "wvbsy"))
     (Thread/sleep 5)))
 
@@ -46,41 +57,21 @@
         (execute-pigs-cmd "w" (str dir-pin) (str direction))))))
 
 ;; --- Limit Switch Monitoring ---
-(defn- check-limit-switches
-  "Checks limit switches and stops waveform if triggered. Returns true if waveform should continue."
-  [wave-ids commands]
-  (try
-    (let [pin-values (mapv #(execute-pigs-cmd "r" (str %)) (limit-switch-pins))
-          should-stop (some (fn [motor-id]
-                              (when-let [cmd (get commands motor-id)]
-                                (let [dir (:direction cmd 0)
-                                      pulses (:total-pulses cmd 0)
-                                      val (nth pin-values motor-id)]
-                                  (and (> pulses 0) (= dir 1) (= "0" val)))))
-                            (keys commands))]
-      (if should-stop
-        (do
-          (log/warn "Limit switch triggered! Stopping waveform.")
-          (execute-pigs-cmd "wvhlt")
-          (doseq [wid wave-ids]
-            (execute-pigs-cmd "wvdel" (str wid)))
-          (log/infof "Waveforms %s stopped and deleted." wave-ids)
-          false)
-        true))
-    (catch Exception e
-      (log/errorf "Error in limit switch monitoring: %s" (.getMessage e))
-      true)))
 
-(defn- monitor-limit-switches
-  "Monitors limit switches in a separate thread."
-  [wave-ids commands]
-  (future
-    (while (= "1" (execute-pigs-cmd "wvbsy"))
-      (when (check-limit-switches wave-ids commands)
-        (Thread/sleep 5)))
-    (doseq [wid wave-ids]
-      (execute-pigs-cmd "wvdel" (str wid)))
-    (log/info "Waveform finished or stopped.")))
+(defn- limit-triggered?
+  "True when any motor that is moving up (direction 1) has hit its limit
+  switch (active low)."
+  [commands]
+  (try
+    (let [pin-values (mapv #(execute-pigs-cmd "r" (str %)) (limit-switch-pins))]
+      (boolean (some (fn [[motor-id {:keys [direction total-pulses]}]]
+                       (and (pos? (or total-pulses 0))
+                            (= 1 direction)
+                            (= "0" (nth pin-values motor-id nil))))
+                     commands)))
+    (catch Exception e
+      (log/errorf "Error reading limit switches: %s" (.getMessage e))
+      false)))
 
 (defn- is-motor-at-limit?
   "Checks if a motor is being commanded up while its limit switch is pressed."
@@ -91,52 +82,83 @@
       (= "0" limit-value))
     false))
 
-;; --- Waveform Execution ---
-(defn- start-waveform-chain
-  "Starts a waveform chain process for the given wave-ids and loop count, and returns its PID."
-  [wave-ids loop-count]
-  (let [repeats loop-count
-        lo (mod repeats 256)
-        hi (quot repeats 256)
-        chain (if (> loop-count 1)
-                (concat ["255" "0"]
-                        (map str wave-ids)
-                        ["255" "1" (str lo) (str hi)])
-                (map str wave-ids))
-        command-args (into ["wvcha"] chain)]
-    (apply execute-pigs-cmd command-args)
-    (log/infof "wvcha started successfully for command: pigs %s" (str/join " " command-args))))
+;; --- Streamed Waveform Transmission ---
 
-(defn- create-and-run-wave
-  "Adds waveforms to pigpiod, creates them, and starts the chain."
-  [waveforms loop-count commands]
-  (when (pos? loop-count)
-    (clear-waveforms)
-    (let [wave-ids (keep (fn [pulse-chunk]
-                           (apply execute-pigs-cmd "wvag" (flatten pulse-chunk))
-                           (try
-                             (Integer/parseInt (execute-pigs-cmd "wvcre"))
-                             (catch Exception e
-                               (log/errorf "Failed to parse wave-id: %s" (.getMessage e))
-                               nil)))
-                         waveforms)]
-      (if (and (seq wave-ids) (every? #(>= % 0) wave-ids))
-        (do
-          (log/info "Waveforms created with IDs:" wave-ids)
-          (start-waveform-chain wave-ids loop-count)
-          (monitor-limit-switches wave-ids commands)
-          (log/infof "Waveform chain started for wave-ids %s" (vec wave-ids)))
-        (log/error "Failed to create one or more waveforms")))))
+(defn- create-wave!
+  "Adds a pulse chunk to pigpiod and creates a wave from it. Returns the
+  wave id."
+  [pulse-chunk]
+  (apply execute-pigs-cmd "wvag" (map str (flatten pulse-chunk)))
+  (Integer/parseInt (execute-pigs-cmd "wvcre")))
+
+(defn- abort!
+  "Halts transmission and deletes all waves."
+  [reason]
+  (log/warnf "Aborting move: %s" reason)
+  (execute-pigs-cmd "wvhlt")
+  (clear-waveforms)
+  :aborted)
+
+(defn- wait-until-playing
+  "Polls until the queued wave `wid` starts playing (i.e. its predecessor
+  finished), checking limit switches. Returns :ok, :done (transmission
+  already past wid), or :limit."
+  [wid commands]
+  (loop []
+    (if (limit-triggered? commands)
+      :limit
+      (let [at (execute-pigs-cmd "wvtat")]
+        (cond
+          (= at (str wid)) :ok
+          ;; 9999 = no wave transmitting: we were slow and the whole
+          ;; queue drained. 9998 = transmitted wave was deleted.
+          (contains? #{"9999" "9998"} at) :done
+          :else (do (Thread/sleep 2) (recur)))))))
+
+(defn- final-wait
+  "Blocks until transmission finishes, checking limit switches.
+  Returns :ok or :limit."
+  [commands]
+  (loop []
+    (cond
+      (limit-triggered? commands) :limit
+      (not= "1" (execute-pigs-cmd "wvbsy")) :ok
+      :else (do (Thread/sleep 2) (recur)))))
+
+(defn- stream-chunks!
+  "Streams pulse chunks through pigpiod: at most two waves are alive at a
+  time (playing + queued via one-shot-sync). Deletes each wave once its
+  successor is playing. Returns :ok or :aborted."
+  [chunks commands]
+  (clear-waveforms)
+  (let [first-wid (create-wave! (first chunks))]
+    (execute-pigs-cmd "wvtxm" (str first-wid) "0") ; one-shot: start now
+    (loop [prev-wid first-wid
+           remaining (rest chunks)]
+      (if (seq remaining)
+        (let [wid (create-wave! (first remaining))]
+          (execute-pigs-cmd "wvtxm" (str wid) "2") ; one-shot-sync: queue
+          (case (wait-until-playing wid commands)
+            :limit (abort! "limit switch triggered")
+            (do (execute-pigs-cmd "wvdel" (str prev-wid))
+                (recur wid (rest remaining)))))
+        ;; last wave queued/playing — drain and clean up
+        (case (final-wait commands)
+          :limit (abort! "limit switch triggered")
+          (do (execute-pigs-cmd "wvdel" (str prev-wid))
+              :ok))))))
 
 ;; --- Main Public Function ---
+
 (defn send-commands
-  "Processes motor commands, generates a synchronized waveform, and executes it."
+  "Processes motor commands, generates a synchronized pulse stream, and
+  transmits it. Blocks until the move completes. Returns :ok, or
+  :aborted when a limit switch stopped the move."
   [commands]
   (log/infof "Processing motor commands: %s" commands)
   ;; Prevent motors from moving up if they are already at the limit switch.
   (let [checked-commands (into {}
-                               (map (fn [[motor-number {:keys [total-pulses direction] :as command}]]
-                                      (log/info "motor:" motor-number)
+                               (map (fn [[motor-number {:keys [direction] :as command}]]
                                       (if (is-motor-at-limit? motor-number direction)
                                         (do
                                           (log/warnf "Motor %d is at its limit and commanded to move up. Ignoring command." motor-number)
@@ -152,12 +174,14 @@
     (log/info "Setting motor directions...")
     (set-direction-pins checked-commands)
 
-    (log/info "Generating synchronized waveform for steps:" step-counts "on pins:" step-pins)
-    (let [{:keys [waveforms loop-count]} (timing/generate-waveform-chain step-counts step-pins)]
-      (do (log/info "loop-count:" loop-count "waveforms:" (count waveforms))
-        (if (and (seq waveforms) (pos? loop-count))
-          (create-and-run-wave waveforms loop-count checked-commands)
-          (log/info "No movement required (zero pulses or empty waveform)."))))))
+    (log/info "Generating pulse chunks for steps:" step-counts "on pins:" step-pins)
+    (let [chunks (timing/generate-pulse-chunks step-counts step-pins)]
+      (if (seq chunks)
+        (let [result (stream-chunks! chunks checked-commands)]
+          (log/infof "Move finished: %s (%d chunks)" result (count chunks))
+          result)
+        (do (log/info "No movement required (zero pulses or empty waveform).")
+            :ok)))))
 
 ;; --- Homing ---
 
@@ -207,15 +231,14 @@
 
 (comment
   ;; Example of moving three motors with different step counts.
-  ;; This is now possible with the refactored driver.
-  (let [commands {0 {:total-pulses 500, :direction 1} 
-                  1 {:total-pulses 501, :direction 1} 
+  (let [commands {0 {:total-pulses 500, :direction 1}
+                  1 {:total-pulses 501, :direction 1}
                   2 {:total-pulses 502, :direction 1}}]
     (send-commands commands))
 
   ;; 0 is down
-  (let [commands {0 {:total-pulses 500, :direction 0} 
-                  1 {:total-pulses 500, :direction 0} 
+  (let [commands {0 {:total-pulses 500, :direction 0}
+                  1 {:total-pulses 500, :direction 0}
                   2 {:total-pulses 500, :direction 0}}]
     (send-commands commands))
 
