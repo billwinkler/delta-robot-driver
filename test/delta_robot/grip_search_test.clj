@@ -1,0 +1,67 @@
+(ns delta-robot.grip-search-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [delta-robot.grip-search :as gs]))
+
+(deftest servo-target-test
+  (testing "target is pecan + comp + nudge"
+    (is (= [110.0 120.0] (gs/servo-target [110.0 120.0] [0.0 0.0] [0 0])))
+    (is (= [99.0 105.0] (gs/servo-target [110.0 120.0] [-11.0 -15.0] [0 0])))
+    (is (= [104.0 110.0] (gs/servo-target [110.0 120.0] [-11.0 -15.0] [5 5]))))
+  (testing "nil when the pecan was not found"
+    (is (nil? (gs/servo-target nil [-11.0 -15.0] [0 0])))))
+
+(deftest cross-error-test
+  (testing "error is target - cross"
+    (is (= [10.0 20.0] (gs/cross-error [100.0 100.0] [110.0 120.0])))
+    (is (= [0.0 0.0] (gs/cross-error [110.0 120.0] [110.0 120.0]))))
+  (testing "nil when the cross was not found"
+    (is (nil? (gs/cross-error nil [110.0 120.0])))))
+
+(deftest error->move-test
+  (let [cfg {:jinv [[0.412 0.147] [-0.203 0.642]]}
+        servo {:gain 1.0 :max-step-mm 25}]
+    (testing "identity-gain conversion matches Jinv"
+      (let [[mx my] (gs/error->move [10.0 0.0] cfg servo)]
+        (is (< (Math/abs (- mx 4.12)) 1e-9))
+        (is (< (Math/abs (- my -2.03)) 1e-9))))
+    (testing "gain scales the move"
+      (let [[mx _] (gs/error->move [10.0 0.0] cfg (assoc servo :gain 0.5))]
+        (is (< (Math/abs (- mx 2.06)) 1e-9))))
+    (testing "moves are clamped to max-step-mm"
+      (let [[mx my] (gs/error->move [1000.0 1000.0] cfg servo)]
+        (is (== 25 mx))
+        (is (<= (Math/abs (double my)) 25.0))))))
+
+(deftest converged?-test
+  (is (gs/converged? [3 4] 8))     ; magnitude 5
+  (is (not (gs/converged? [6 8] 8)))  ; magnitude 10
+  (is (gs/converged? [0 0] 1)))
+
+(deftest next-position-test
+  (testing "adds and rounds"
+    (is (= [-45 10] (gs/next-position [-50 5] [5.4 4.6] 80))))
+  (testing "clamps to workspace bound"
+    (is (= [-80 80] (gs/next-position [-75 75] [-20 20] 80)))))
+
+(deftest random-deposit-test
+  (let [region {:x [-75 -35] :y [-25 25]}]
+    (testing "extremes stay inside the region"
+      (is (= [-75 -25] (gs/random-deposit region (constantly 0.0))))
+      (is (= [-35 25] (gs/random-deposit region (constantly 0.999999)))))
+    (testing "midpoint"
+      (is (= [-55 0] (gs/random-deposit region (constantly 0.5)))))))
+
+(deftest verdict-test
+  (is (= :dropped (gs/verdict [700.0 450.0])))
+  (is (= :lifted (gs/verdict nil))))
+
+(deftest validate-params-test
+  (let [ok {:mm 25 :z-grip 417 :pause-ms 300 :dx-px 0 :dy-px 0}]
+    (is (nil? (gs/validate-params ok)))
+    (is (some? (gs/validate-params (assoc ok :mm 11))))
+    (is (some? (gs/validate-params (assoc ok :mm 41))))
+    (is (some? (gs/validate-params (assoc ok :z-grip 421))))
+    (is (some? (gs/validate-params (assoc ok :z-grip 399))))
+    (is (some? (gs/validate-params (assoc ok :pause-ms 5000))))
+    (is (some? (gs/validate-params (assoc ok :dx-px -21))))
+    (is (some? (gs/validate-params (assoc ok :dy-px 21))))))

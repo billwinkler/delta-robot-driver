@@ -27,6 +27,10 @@
          {:doc "take a picture"
           :task (exec 'delta-robot.tasks/camera)}
           
+         grip-attempt
+         {:doc "one scripted grip attempt (servo, grip, lift, verdict, log)"
+          :task (exec (quote delta-robot.grip-search/grip-attempt))}
+
          collect-data
          {:doc "collect training data"
           :task (exec 'delta-robot.tasks/collect-data)}}}
