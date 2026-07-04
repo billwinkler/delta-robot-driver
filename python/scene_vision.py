@@ -74,15 +74,16 @@ def _intersect(p1, d1, p2, d2):
     return p1 + t * d1
 
 
-def find_cross(gray):
+def _cross_at(gray, hough_threshold, min_line_length, max_line_gap):
     y0, y1, x0, x1 = ROI
     mask = np.zeros_like(gray)
     mask[y0:y1, x0:x1] = 255
     roi = cv2.bitwise_and(gray, mask)
     _, thr = cv2.threshold(roi, 215, 255, cv2.THRESH_BINARY)
     thr = cv2.dilate(thr, np.ones((3, 3), np.uint8))
-    segs = cv2.HoughLinesP(thr, 1, np.pi / 180, threshold=60,
-                           minLineLength=80, maxLineGap=25)
+    segs = cv2.HoughLinesP(thr, 1, np.pi / 180, threshold=hough_threshold,
+                           minLineLength=min_line_length,
+                           maxLineGap=max_line_gap)
     if segs is None:
         return None
     angles = []
@@ -105,6 +106,25 @@ def find_cross(gray):
     if not (x0 <= xy[0] <= x1 and y0 <= xy[1] <= y1):
         return None
     return [round(float(xy[0]), 1), round(float(xy[1]), 1)]
+
+
+def find_cross(gray):
+    """Locate the laser-cross intersection: strict first, then a
+    relaxed fallback for jaw-occluded crosses.
+
+    The strict Hough parameters are exact and reliable when both laser
+    legs are unbroken. When the gripper hangs over one leg it gets
+    chopped below minLineLength and the cross vanishes (live-verify
+    n3/n4, 2026-07-04: one angle family found, cross plainly visible).
+    The relaxed pass accepts shorter/gappier segments — noisier (its
+    intersection can drift when extra segments join a cluster; archive
+    sweep showed it must NOT replace the strict pass wholesale), but
+    good enough for a closed loop that re-measures every iteration.
+    """
+    xy = _cross_at(gray, 60, 80, 25)
+    if xy is not None:
+        return xy
+    return _cross_at(gray, 40, 50, 40)
 
 
 def find_pecan(gray):
