@@ -32,6 +32,13 @@
    :hover-z 400
    :lift-z 385
    :servo {:gain 0.9 :tol-px 8 :max-iters 10 :max-step-mm 25}
+   ;; descend-verify-correct (2026-07-04): at grip depth the jaw tips
+   ;; and the pecan share the platform plane, so gap-center vs pecan
+   ;; is a parallax-free error — measured, not calibrated. comp-px is
+   ;; demoted to an initial guess for the cross servo.
+   ;; :pecan-radius-px doubles as ghost rejection: a "pecan" further
+   ;; than this from the jaws is a static dark blob, not the target.
+   :verify {:tol-px 12 :max-corrections 3 :pecan-radius-px 130}
    ;; workspace clamp for ALL commanded xy (CLI enforces its own too)
    :xy-bound 80
    ;; random deposit region (arm coords, comfortably on the platform)
@@ -86,6 +93,25 @@
   [pecan-detection]
   (if pecan-detection :dropped :lifted))
 
+(defn pecan-near-gap
+  "The pecan detection, if it is within radius px of the jaw gap
+  center — otherwise nil. Rejects static dark blobs (tape corners,
+  platform holes) that the detector latches onto when the real pecan
+  is occluded or shadowed: a 'pecan' far from the jaws is a ghost."
+  [pecan gap radius]
+  (when (and pecan gap)
+    (let [dx (- (first pecan) (first gap))
+          dy (- (second pecan) (second gap))]
+      (when (<= (Math/sqrt (+ (* dx dx) (* dy dy))) radius)
+        pecan))))
+
+(defn gap-error
+  "Pixel error to null in the verify step: pecan - gap-center.
+  Same image plane as the cross servo, so the same Jinv applies."
+  [gap pecan]
+  (when (and gap pecan)
+    [(- (first pecan) (first gap)) (- (second pecan) (second gap))]))
+
 (defn validate-params [{:keys [mm z-grip pause-ms dx-px dy-px]}]
   (cond
     (not (<= 12 mm 40)) (str "mm must be 12..40, got " mm)
@@ -138,6 +164,57 @@
                 nxt (next-position xy mv xy-bound)]
             (motion/move-to (first nxt) (second nxt) hover-z)
             (recur nxt (inc i))))))))
+
+(defn descend-verify-correct!
+  "Descend to grip depth with jaws OPEN and measure the actual
+  jaw-gap-vs-pecan error in the platform plane; correct if needed.
+
+  This replaces trust in the comp-px constant with a measurement:
+  the cross servo (position-dependent comp) gets us close, then this
+  loop measures where the jaws ACTUALLY are relative to the pecan and
+  fixes the residual. Corrections happen at hover height so the open
+  jaws never drag through the pecan sideways.
+
+  Returns {:status :verified | :assume-contact | :no-jaws | :max-corrections
+           :xy [x y] :k n :checks [...]}  — :checks logs every
+  measurement for the attempts log (Phase-4 training data)."
+  [start-xy z-grip]
+  (let [{:keys [verify hover-z xy-bound servo]} cfg
+        {:keys [tol-px max-corrections pecan-radius-px]} verify]
+    (loop [xy start-xy, k 0, checks []]
+      (motion/move-to (first xy) (second xy) z-grip)
+      (let [v (vision! (str "verify-" k))
+            gap (:gap-center v)
+            pecan (pecan-near-gap (:pecan v) gap pecan-radius-px)
+            err (gap-error gap pecan)
+            check {:k k :xy xy :gap gap :pecan (:pecan v)
+                   :near-pecan pecan :err err}
+            checks (conj checks check)]
+        (cond
+          ;; jaws not measurable at depth (merged with pecan/shadow):
+          ;; likely touching or very close -> close and let the grip
+          ;; frame + lift verdict tell the truth
+          (nil? gap)
+          {:status :assume-contact :xy xy :k k :checks checks}
+
+          ;; jaws measured, no pecan near them: either occluded behind
+          ;; a jaw or merged into the jaw blob -> same bet as above
+          (nil? pecan)
+          {:status :assume-contact :xy xy :k k :checks checks}
+
+          (converged? err tol-px)
+          {:status :verified :xy xy :k k :checks checks}
+
+          (>= k max-corrections)
+          {:status :max-corrections :xy xy :k k :checks checks}
+
+          :else
+          (let [mv (error->move err cfg servo)
+                nxt (next-position xy mv xy-bound)]
+            ;; retreat to hover before moving sideways
+            (motion/move-to (first xy) (second xy) hover-z)
+            (motion/move-to (first nxt) (second nxt) hover-z)
+            (recur nxt (inc k) checks)))))))
 
 ;; ---------------------------------------------------------------------
 ;; the task
@@ -195,37 +272,62 @@
                         (finish! {:verdict :servo-failed :servo servo
                                   :pre (select-keys pre [:pecan :cross])
                                   :target target}))
-                    (let [[x y] (:xy servo)]
-                      (motion/move-to x y z-grip)
+                    ;; measure-and-correct at grip depth (jaws open):
+                    ;; the jaw tips and the pecan share the platform
+                    ;; plane, so this is a parallax-free measurement of
+                    ;; where the jaws actually are — comp-px is only
+                    ;; the initial guess that got us here.
+                    (let [vr (descend-verify-correct! (:xy servo) z-grip)
+                          [x y] (:xy vr)
+                          vr-log (select-keys vr [:status :k :checks])]
                       (gripper/grip mm)
                       (Thread/sleep 200)
-                      (let [grip-v (vision! "grip")]
-                        (Thread/sleep pause-ms)
-                        (motion/move-to x y (:lift-z cfg))
-                        (Thread/sleep 300)
-                        ;; verdict is judged from HOME so the jaws are
-                        ;; out of the scene ROI (pecan rides along if held)
-                        (motion/home)
-                        (let [lift-v (vision! "verdict")
-                              v (verdict (:pecan lift-v))
-                              deposit (when (= v :lifted)
-                                        (random-deposit (:deposit cfg) rand))
-                              placed (when deposit
-                                       (let [[dx dy] deposit]
-                                         (motion/move-to dx dy (:hover-z cfg))
-                                         (motion/move-to dx dy 417)
-                                         (gripper/open)
-                                         (motion/move-to dx dy (:hover-z cfg))
-                                         (motion/home)
-                                         (vision! "deposit-check")))]
-                          (when (= v :dropped) (gripper/open))
-                          (motion/home)
-                          (finish! {:verdict v
-                                    :pre (select-keys pre [:pecan :cross])
-                                    :target target
-                                    :servo (select-keys servo [:iters :final-err :xy])
-                                    :grip-vision grip-v
-                                    :lift-vision lift-v
-                                    :deposit deposit
-                                    :deposit-check (when placed
-                                                     (select-keys placed [:pecan]))}))))))))))))))
+                      (let [grip-v (vision! "grip")
+                            last-gap (or (:gap-center grip-v)
+                                         (some :gap (reverse (:checks vr))))
+                            missed (pecan-near-gap
+                                    (:pecan grip-v) last-gap
+                                    (get-in cfg [:verify :pecan-radius-px]))]
+                        (if missed
+                          ;; jaws demonstrably closed BESIDE the pecan:
+                          ;; no point lifting — report the miss honestly
+                          ;; so the driver learns targeting vs friction
+                          (do (gripper/open)
+                              (motion/home)
+                              (finish! {:verdict :missed
+                                        :pre (select-keys pre [:pecan :cross])
+                                        :target target
+                                        :servo (select-keys servo [:iters :final-err :xy])
+                                        :verify vr-log
+                                        :grip-vision grip-v}))
+                          (do
+                            (Thread/sleep pause-ms)
+                            (motion/move-to x y (:lift-z cfg))
+                            (Thread/sleep 300)
+                            ;; verdict is judged from HOME so the jaws are
+                            ;; out of the scene ROI (pecan rides along if held)
+                            (motion/home)
+                            (let [lift-v (vision! "verdict")
+                                  v (verdict (:pecan lift-v))
+                                  deposit (when (= v :lifted)
+                                            (random-deposit (:deposit cfg) rand))
+                                  placed (when deposit
+                                           (let [[dx dy] deposit]
+                                             (motion/move-to dx dy (:hover-z cfg))
+                                             (motion/move-to dx dy 417)
+                                             (gripper/open)
+                                             (motion/move-to dx dy (:hover-z cfg))
+                                             (motion/home)
+                                             (vision! "deposit-check")))]
+                              (when (= v :dropped) (gripper/open))
+                              (motion/home)
+                              (finish! {:verdict v
+                                        :pre (select-keys pre [:pecan :cross])
+                                        :target target
+                                        :servo (select-keys servo [:iters :final-err :xy])
+                                        :verify vr-log
+                                        :grip-vision grip-v
+                                        :lift-vision lift-v
+                                        :deposit deposit
+                                        :deposit-check (when placed
+                                                         (select-keys placed [:pecan]))}))))))))))))))))

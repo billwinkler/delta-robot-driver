@@ -55,6 +55,26 @@
   (is (= :dropped (gs/verdict [700.0 450.0])))
   (is (= :lifted (gs/verdict nil))))
 
+(deftest pecan-near-gap-test
+  (testing "pecan within radius of the gap passes through"
+    (is (= [860.0 540.0] (gs/pecan-near-gap [860.0 540.0] [858.0 506.5] 130))))
+  (testing "a distant blob is a ghost, not the pecan"
+    ;; the [552 456] static blob vs jaws at [858 506] — 313 px away
+    (is (nil? (gs/pecan-near-gap [552.8 456.7] [858.0 506.5] 130))))
+  (testing "exactly at radius still counts"
+    (is (= [100.0 100.0] (gs/pecan-near-gap [100.0 100.0] [100.0 230.0] 130))))
+  (testing "nil pecan or nil gap -> nil"
+    (is (nil? (gs/pecan-near-gap nil [858.0 506.5] 130)))
+    (is (nil? (gs/pecan-near-gap [860.0 540.0] nil 130)))))
+
+(deftest gap-error-test
+  (testing "error is pecan - gap (drive the gap onto the pecan)"
+    (is (= [2.0 33.5] (gs/gap-error [858.0 506.5] [860.0 540.0])))
+    (is (= [0.0 0.0] (gs/gap-error [858.0 506.5] [858.0 506.5]))))
+  (testing "nil when either is missing"
+    (is (nil? (gs/gap-error nil [860.0 540.0])))
+    (is (nil? (gs/gap-error [858.0 506.5] nil)))))
+
 (deftest validate-params-test
   (let [ok {:mm 25 :z-grip 417 :pause-ms 300 :dx-px 0 :dy-px 0}]
     (is (nil? (gs/validate-params ok)))

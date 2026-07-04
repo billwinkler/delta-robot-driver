@@ -131,6 +131,112 @@ def find_pecan(gray):
     return best
 
 
+MIN_JAW_HEIGHT = 60   # px: jaw fingers are tall; pecans are not
+TOP_ATTACH = 12       # jaw component must start this close to ROI top
+MIN_FINGER_WIDTH = 8  # px: ignore skinny noise columns
+JAW_SIDE_MARGIN = 40  # px: the perforated strut enters from the sides
+JAW_PAIR_DX = (20, 150)   # tip separation range, px
+JAW_PAIR_DY = 60          # max tip height difference, px
+
+
+def find_jaw_tips(gray):
+    """Locate the two gripper jaw tips and their gap center.
+
+    The jaws are the dark components that hang from the ROI top edge
+    (exactly the property find_pecan uses to reject them). Their tips
+    are the two deepest 'fingers' of those components' bottom profile.
+    At grip depth the tips sit on the platform plane — the same plane
+    as the pecan — so gap-center vs pecan is a parallax-free error.
+
+    Validated 2026-07-04 on the grip-attempt archive: 126/132 open-jaw
+    servo frames detected; gap center within ~1 px of the hand-measured
+    calibration ((941.5,515.5) vs (942,500) manual). Closed-jaw frames
+    often return None (tips merge with each other/the pecan) — callers
+    must treat None as 'jaws not measurable', not as an error.
+
+    Returns (tips, gap_center) or (None, None).
+    """
+    y0, y1, x0, x1 = ROI
+    region = gray[y0:y1, x0:x1]
+    _, dark = cv2.threshold(region, 100, 255, cv2.THRESH_BINARY_INV)
+    dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(dark)
+    jaw_mask = np.zeros_like(dark)
+    for i in range(1, n):
+        if (stats[i, cv2.CC_STAT_TOP] <= TOP_ATTACH
+                and stats[i, cv2.CC_STAT_HEIGHT] >= MIN_JAW_HEIGHT):
+            jaw_mask[labels == i] = 255
+    if not jaw_mask.any():
+        return None, None
+
+    # bottom profile: per column, the lowest jaw pixel (-1 = none)
+    hgt, wid = jaw_mask.shape
+    ys = np.arange(hgt).reshape(-1, 1)
+    prof = np.where(jaw_mask > 0, ys, -1).max(axis=0)
+
+    # contiguous runs of jaw presence
+    runs, start = [], None
+    for x in range(wid):
+        if prof[x] >= 0 and start is None:
+            start = x
+        elif prof[x] < 0 and start is not None:
+            runs.append((start, x))
+            start = None
+    if start is not None:
+        runs.append((start, wid))
+    runs = [r for r in runs if r[1] - r[0] >= MIN_FINGER_WIDTH]
+    if not runs:
+        return None, None
+
+    # finger tips = local maxima of the bottom profile
+    tips = []
+    for (a, b) in runs:
+        seg = prof[a:b].astype(float)
+        smooth = np.convolve(seg, np.ones(9) / 9, mode="same")
+        w = 15
+        for x in range(len(seg)):
+            lo, hi = max(0, x - w), min(len(seg), x + w + 1)
+            if (smooth[x] >= smooth[lo:hi].max() - 0.5
+                    and seg[x] == seg[lo:hi].max()):
+                tips.append((a + x, int(seg[x])))
+    tips.sort()
+    merged = []
+    for t in tips:
+        if merged and t[0] - merged[-1][0] < 30:
+            if t[1] > merged[-1][1]:
+                merged[-1] = t
+        else:
+            merged.append(t)
+    # a "tip" at the ROI bottom is a shadow column; one hugging a side
+    # edge is the perforated strut — neither is a jaw
+    merged = [t for t in merged
+              if t[1] < (y1 - y0) - 5
+              and JAW_SIDE_MARGIN <= t[0] <= (x1 - x0) - JAW_SIDE_MARGIN]
+    if len(merged) < 2:
+        return None, None
+    # deepest valid PAIR: plausibly separated, similar height
+    merged.sort(key=lambda t: -t[1])
+    best = None
+    for i in range(len(merged)):
+        for j in range(i + 1, len(merged)):
+            a, b = sorted([merged[i], merged[j]])
+            if (JAW_PAIR_DX[0] <= b[0] - a[0] <= JAW_PAIR_DX[1]
+                    and abs(a[1] - b[1]) <= JAW_PAIR_DY):
+                best = [a, b]
+                break
+        if best:
+            break
+    if not best:
+        return None, None
+
+    tips_abs = [[round(float(tx + x0), 1), round(float(ty + y0), 1)]
+                for tx, ty in best]
+    gap = [round((tips_abs[0][0] + tips_abs[1][0]) / 2, 1),
+           round((tips_abs[0][1] + tips_abs[1][1]) / 2, 1)]
+    return tips_abs, gap
+
+
 def main():
     args = sys.argv[1:]
     frame = None
@@ -146,8 +252,11 @@ def main():
     if gray is None:
         print(json.dumps({"error": f"unreadable frame {frame}"}))
         return 1
+    jaws, gap = find_jaw_tips(gray)
     print(json.dumps({"cross": find_cross(gray),
                       "pecan": find_pecan(gray),
+                      "jaws": jaws,
+                      "gap-center": gap,
                       "frame": frame}))
     return 0
 
