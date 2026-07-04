@@ -175,20 +175,31 @@
   fixes the residual. Corrections happen at hover height so the open
   jaws never drag through the pecan sideways.
 
+  When the frame's own pecan detection is missing or rejected (the
+  pecan often merges into the jaw blob when they touch — live-verify
+  n6 closed beside the pecan this way), the PRE-SERVO pecan position
+  is used instead: the pecan hasn't moved since the precheck and the
+  coordinates live in the same image plane, so gap vs pre-pecan is
+  still a valid error. :assume-contact remains only for the case
+  where not even the jaws are measurable.
+
   Returns {:status :verified | :assume-contact | :no-jaws | :max-corrections
            :xy [x y] :k n :checks [...]}  — :checks logs every
   measurement for the attempts log (Phase-4 training data)."
-  [start-xy z-grip]
+  [start-xy z-grip pre-pecan]
   (let [{:keys [verify hover-z xy-bound servo]} cfg
         {:keys [tol-px max-corrections pecan-radius-px]} verify]
     (loop [xy start-xy, k 0, checks []]
       (motion/move-to (first xy) (second xy) z-grip)
       (let [v (vision! (str "verify-" k))
             gap (:gap-center v)
-            pecan (pecan-near-gap (:pecan v) gap pecan-radius-px)
+            seen (pecan-near-gap (:pecan v) gap pecan-radius-px)
+            pecan (or seen (pecan-near-gap pre-pecan gap pecan-radius-px))
             err (gap-error gap pecan)
             check {:k k :xy xy :gap gap :pecan (:pecan v)
-                   :near-pecan pecan :err err}
+                   :near-pecan pecan
+                   :pecan-src (cond seen :frame pecan :pre :else nil)
+                   :err err}
             checks (conj checks check)]
         (cond
           ;; jaws not measurable at depth (merged with pecan/shadow):
@@ -197,8 +208,10 @@
           (nil? gap)
           {:status :assume-contact :xy xy :k k :checks checks}
 
-          ;; jaws measured, no pecan near them: either occluded behind
-          ;; a jaw or merged into the jaw blob -> same bet as above
+          ;; jaws measured but neither the frame's pecan nor the
+          ;; pre-servo position is anywhere near them -> the target
+          ;; is genuinely unaccounted for; bet on contact and let the
+          ;; grip frame + lift verdict rule
           (nil? pecan)
           {:status :assume-contact :xy xy :k k :checks checks}
 
@@ -277,7 +290,8 @@
                     ;; plane, so this is a parallax-free measurement of
                     ;; where the jaws actually are — comp-px is only
                     ;; the initial guess that got us here.
-                    (let [vr (descend-verify-correct! (:xy servo) z-grip)
+                    (let [vr (descend-verify-correct! (:xy servo) z-grip
+                                                      (:pecan pre))
                           [x y] (:xy vr)
                           vr-log (select-keys vr [:status :k :checks])]
                       (gripper/grip mm)

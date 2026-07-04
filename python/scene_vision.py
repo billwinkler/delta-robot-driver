@@ -30,11 +30,13 @@ PECAN_AREA = (500, 5000)
 PECAN_MAX_DIM = 110
 EDGE_MARGIN = 55
 # Static dark blobs INTERIOR to the ROI that pass the pecan filters
-# (scene px, measured). The platform's top-left tape corner sat at
-# [552.6, 456.1] +-1 px across every 2026-07-04 frame and stole the
-# first genuine :lifted verdict (empty platform, "pecan" = tape).
-# Re-measure if the camera or platform moves.
-STATIC_BLOBS = [(552.6, 456.1)]
+# (scene px, measured). Re-measure if the camera or platform moves.
+# - [552.6, 456.1]: platform top-left tape corner; stole the first
+#   genuine :lifted verdict (empty platform, "pecan" = tape).
+# - [541.4, 599.3]: platform mounting hole; won find_pecan in 4/222
+#   archive frames (only when the real pecan was jaw-merged) and sent
+#   live-verify n6 into a false :assume-contact.
+STATIC_BLOBS = [(552.6, 456.1), (541.4, 599.3)]
 STATIC_BLOB_R = 18
 
 
