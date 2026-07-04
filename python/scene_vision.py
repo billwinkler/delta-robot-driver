@@ -29,6 +29,13 @@ EXPOSURE = 25
 PECAN_AREA = (500, 5000)
 PECAN_MAX_DIM = 110
 EDGE_MARGIN = 55
+# Static dark blobs INTERIOR to the ROI that pass the pecan filters
+# (scene px, measured). The platform's top-left tape corner sat at
+# [552.6, 456.1] +-1 px across every 2026-07-04 frame and stole the
+# first genuine :lifted verdict (empty platform, "pecan" = tape).
+# Re-measure if the camera or platform moves.
+STATIC_BLOBS = [(552.6, 456.1)]
+STATIC_BLOB_R = 18
 
 
 def device():
@@ -124,6 +131,10 @@ def find_pecan(gray):
         if (cx < EDGE_MARGIN or cy < EDGE_MARGIN
                 or (x1 - x0) - cx < EDGE_MARGIN
                 or (y1 - y0) - cy < EDGE_MARGIN):
+            continue
+        # known static dark blobs are never the pecan
+        if any((cx + x0 - sx) ** 2 + (cy + y0 - sy) ** 2 <= STATIC_BLOB_R ** 2
+               for sx, sy in STATIC_BLOBS):
             continue
         if area > best_area:
             best = [round(cx + x0, 1), round(cy + y0, 1)]
