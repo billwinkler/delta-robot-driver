@@ -25,11 +25,13 @@
    :frame-dir "data/grip-frames"
    ;; scene-camera Jacobian inverse, mm per px (fit 2026-07-04)
    :jinv [[0.412 0.147] [-0.203 0.642]]
-   ;; cross->grip-point compensation, scene px (pecan-in-jaws calibration)
-   :comp-px [-11.0 -15.0]
+   ;; cross->grip-point compensation, scene px: servo target = pecan + comp.
+   ;; Measured 2026-07-04 from a closed-jaws-at-grip-height frame:
+   ;; jaw-gap center (942,500), cross (974,515) -> cross leads by (+32,+15)
+   :comp-px [32.0 15.0]
    :hover-z 400
    :lift-z 385
-   :servo {:gain 0.7 :tol-px 8 :max-iters 8 :max-step-mm 25}
+   :servo {:gain 0.9 :tol-px 8 :max-iters 10 :max-step-mm 25}
    ;; workspace clamp for ALL commanded xy (CLI enforces its own too)
    :xy-bound 80
    ;; random deposit region (arm coords, comfortably on the platform)
@@ -190,7 +192,9 @@
                 (let [servo (servo-cross-to! [-55 0] target)]
                   (if (not= :converged (:status servo))
                     (do (motion/home)
-                        (finish! {:verdict :servo-failed :servo servo}))
+                        (finish! {:verdict :servo-failed :servo servo
+                                  :pre (select-keys pre [:pecan :cross])
+                                  :target target}))
                     (let [[x y] (:xy servo)]
                       (motion/move-to x y z-grip)
                       (gripper/grip mm)

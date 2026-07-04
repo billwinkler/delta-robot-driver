@@ -28,6 +28,7 @@ ROI = (360, 740, 450, 1240)
 EXPOSURE = 25
 PECAN_AREA = (500, 5000)
 PECAN_MAX_DIM = 110
+EDGE_MARGIN = 55
 
 
 def device():
@@ -116,10 +117,16 @@ def find_pecan(gray):
             continue
         if by <= 2:  # touches ROI top edge -> jaw/arm shadow, not pecan
             continue
+        m = cv2.moments(c)
+        cx, cy = m["m10"] / m["m00"], m["m01"] / m["m00"]
+        # platform corner tape triangles hug the ROI edges; real pecans
+        # (and all deposit spots) are interior
+        if (cx < EDGE_MARGIN or cy < EDGE_MARGIN
+                or (x1 - x0) - cx < EDGE_MARGIN
+                or (y1 - y0) - cy < EDGE_MARGIN):
+            continue
         if area > best_area:
-            m = cv2.moments(c)
-            best = [round(m["m10"] / m["m00"] + x0, 1),
-                    round(m["m01"] / m["m00"] + y0, 1)]
+            best = [round(cx + x0, 1), round(cy + y0, 1)]
             best_area = area
     return best
 
