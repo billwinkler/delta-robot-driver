@@ -27,7 +27,10 @@
          {:doc "take a picture"
           :task (exec 'delta-robot.tasks/camera)}
           
-         grip-attempt
+         nudge
+        {:doc "rotate the pecan to a graspable orientation (closed-jaw sweeps)"
+         :task (exec (quote delta-robot.grip-search/nudge))}
+        grip-attempt
          {:doc "one scripted grip attempt (servo, grip, lift, verdict, log)"
           :task (exec (quote delta-robot.grip-search/grip-attempt))}
 

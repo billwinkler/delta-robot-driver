@@ -160,6 +160,46 @@
           d (min d (- 180.0 d))]
       (>= d (- 90.0 tol-deg)))))
 
+(defn rotation-needed
+  "Signed degrees to rotate the pecan's major axis so it becomes
+  perpendicular to the jaw closing axis (= graspable). Smallest
+  magnitude, in [-90, 90). Zero-ish means already graspable."
+  [pecan-angle jaw-axis-deg]
+  (let [target (mod (+ jaw-axis-deg 90.0) 180.0)
+        d (mod (- target pecan-angle) 180.0)]
+    (if (>= d 90.0) (- d 180.0) d)))
+
+(defn px->mm
+  "Raw image-px displacement -> arm-mm move via Jinv (no gain, no
+  clamp — plain geometry, unlike error->move)."
+  [[ex ey] [[a b] [c d]]]
+  [(+ (* a ex) (* b ey)) (+ (* c ex) (* d ey))])
+
+(defn nudge-plan
+  "Plan one rotation nudge in image space: sweep the closed-jaw tool
+  along the perpendicular of the pecan's major axis THROUGH one of
+  its ends — force at the end = torque about the center = yaw.
+
+  Torque sign: r x F with r = s*offset*u and F along R90(u) gives
+  tau = s*offset, so the push DIRECTION is always +R90(u) and the
+  sign of the needed rotation picks WHICH END (s): pushing the +u
+  end rotates +, the -u end rotates -. Both angles live in the same
+  image frame, so camera pose cancels.
+
+  Returns {:from [px] :to [px]} — sweep start (clear of the pecan)
+  and end (through and past the end point)."
+  [pecan-px pecan-angle dtheta {:keys [end-offset-px approach-px follow-px]}]
+  (let [th (Math/toRadians pecan-angle)
+        u [(Math/cos th) (Math/sin th)]
+        p [(- (second u)) (first u)]          ; +R90(u), always
+        s (if (pos? dtheta) 1.0 -1.0)
+        e [(+ (first pecan-px) (* s end-offset-px (first u)))
+           (+ (second pecan-px) (* s end-offset-px (second u)))]]
+    {:from [(- (first e) (* approach-px (first p)))
+            (- (second e) (* approach-px (second p)))]
+     :to   [(+ (first e) (* follow-px (first p)))
+            (+ (second e) (* follow-px (second p)))]}))
+
 (defn final-verdict
   "Positive-evidence upgrade of the lift verdict (added after n7,
   2026-07-04: the from-home 'platform is empty' check reported :lifted
@@ -305,6 +345,106 @@
             (motion/move-to (first xy) (second xy) hover-z)
             (motion/move-to (first nxt) (second nxt) hover-z)
             (recur nxt (inc k) checks)))))))
+
+(defn nudge-rotate!
+  "Rotate the pecan toward a graspable orientation by sweeping the
+  CLOSED jaws through its ends (nudge-plan). Closed loop: nudge,
+  re-measure the angle from home, repeat. The wristless arm cannot
+  rotate its grip — but it can rotate the WORKPIECE.
+
+  Returns {:status :graspable | :gave-up | :no-target | :no-jaws
+           :jaw-axis-deg d :nudges [...]}."
+  [max-nudges]
+  (let [{:keys [hover-z xy-bound jinv verify]} cfg
+        push-z 414              ; tips ~3 mm off the paper: contact the
+                                ; pecan's lower flank, below its center
+        plan-cfg {:end-offset-px 22 :approach-px 38 :follow-px 26}
+        staging [-55 0]
+        clamp-xy (fn [[x y]] [(clamp (Math/round (double x)) (- xy-bound) xy-bound)
+                              (clamp (Math/round (double y)) (- xy-bound) xy-bound)])]
+    ;; measure the closing axis with jaws OPEN — closed jaws merge
+    ;; into one finger and the tip-pair detector rightly refuses.
+    ;; The tip-line angle is the same open or closed (symmetric jaws).
+    (gripper/open)
+    (motion/home)
+    (motion/move-to (first staging) (second staging) hover-z)
+    (let [va (vision! "nudge-axis")
+          tips (:jaws va)
+          ;; anchor the px->arm map at PUSH DEPTH: the hover gap
+          ;; carries ~17 mm of parallax and made nudges sweep air
+          ;; beside the pecan (first live run: k0 hit by luck, k1-k4
+          ;; identical misses, center frozen at 514.5 px)
+          _ (motion/move-to (first staging) (second staging) push-z)
+          vd (vision! "nudge-anchor")
+          gap0 (or (:gap-center vd) (:gap-center va))]
+      (motion/move-to (first staging) (second staging) hover-z)
+      (motion/home)
+      (gripper/close)      ; now become the pusher tool
+      (if-not (and tips gap0)
+        {:status :no-jaws :nudges []}
+        (let [[[x1 y1] [x2 y2]] tips
+              jaw-deg (Math/toDegrees (Math/atan2 (- y2 y1) (- x2 x1)))]
+          (loop [k 0, nudges []]
+            (let [m (vision! (str "nudge-measure-" k))
+                  pecan (:pecan m)
+                  angle (:pecan-angle m)
+                  need (when (and pecan angle)
+                         (rotation-needed angle jaw-deg))]
+              (cond
+                (nil? pecan)
+                {:status :no-target :jaw-axis-deg jaw-deg :nudges nudges}
+
+                (nil? angle)
+                {:status :no-angle :jaw-axis-deg jaw-deg :nudges nudges}
+
+                (<= (Math/abs (double need)) (:orient-tol-deg verify))
+                {:status :graspable :jaw-axis-deg jaw-deg
+                 :final-angle angle :nudges nudges}
+
+                (>= k max-nudges)
+                {:status :gave-up :jaw-axis-deg jaw-deg
+                 :final-angle angle :nudges nudges}
+
+                :else
+                (let [plan (nudge-plan pecan angle need plan-cfg)
+                      ;; anchor px->arm at staging: arm(p) ~ staging +
+                      ;; Jinv*(p - gap0) — coarse is fine, the loop
+                      ;; re-measures after every sweep
+                      to-arm (fn [p] (clamp-xy
+                                      (mapv + staging
+                                            (px->mm (mapv - p gap0) jinv))))
+                      from-xy (to-arm (:from plan))
+                      to-xy (to-arm (:to plan))]
+                  (motion/move-to (first from-xy) (second from-xy) hover-z)
+                  (motion/move-to (first from-xy) (second from-xy) push-z)
+                  (motion/move-to (first to-xy) (second to-xy) push-z)
+                  (motion/move-to (first to-xy) (second to-xy) hover-z)
+                  (motion/home)
+                  (recur (inc k)
+                         (conj nudges {:k k :angle angle :need need
+                                       :pecan pecan
+                                       :from from-xy :to to-xy})))))))))))
+
+(def nudge-spec
+  {:max-nudges {:coerce :int :default 5
+                :desc "Give up after this many sweeps (1..8)."}
+   :notes {:desc "Free-text note recorded with the run."}})
+
+(defn nudge
+  "Rotate the pecan to a graspable orientation (see nudge-rotate!).
+  Logs the run to data/nudges.edn."
+  {:org.babashka/cli {:spec nudge-spec}}
+  [{:keys [max-nudges notes]}]
+  (let [t0 (System/currentTimeMillis)
+        max-n (clamp (or max-nudges 5) 1 8)
+        result (nudge-rotate! max-n)
+        entry (assoc result :ts t0 :notes notes
+                     :ms (- (System/currentTimeMillis) t0))]
+    (gripper/open)
+    (motion/home)
+    (append-log! "data/nudges.edn" entry)
+    (println (pr-str entry))
+    entry))
 
 ;; ---------------------------------------------------------------------
 ;; the task

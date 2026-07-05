@@ -88,6 +88,45 @@
     (is (nil? (gs/graspable? [nil [460.0 500.0]] 90.0 30)))
     (is (nil? (gs/graspable? [[400.0 500.0] [460.0 500.0]] nil 30)))))
 
+(deftest rotation-needed-test
+  (testing "already perpendicular -> zero"
+    (is (== 0.0 (gs/rotation-needed 90.0 0.0))))
+  (testing "long axis along the jaws -> 90 needed (sign is the short way)"
+    (is (== -90.0 (gs/rotation-needed 0.0 0.0))))
+  (testing "small corrections, both signs"
+    (is (== 20.0 (gs/rotation-needed 70.0 0.0)))
+    (is (== -20.0 (gs/rotation-needed 110.0 0.0))))
+  (testing "wraparound at 180"
+    (is (== 15.0 (gs/rotation-needed 170.0 95.0))))
+  (testing "diagonal jaw axis"
+    (is (== 0.0 (gs/rotation-needed 135.0 45.0)))))
+
+(deftest px->mm-test
+  (let [jinv [[0.58 0.14] [-0.19 0.66]]]
+    (testing "identity-ish behavior on axes"
+      (let [[mx my] (gs/px->mm [10.0 0.0] jinv)]
+        (is (< (Math/abs (- mx 5.8)) 1e-9))
+        (is (< (Math/abs (- my -1.9)) 1e-9))))))
+
+(deftest nudge-plan-test
+  (let [cfgp {:end-offset-px 20 :approach-px 30 :follow-px 10}]
+    (testing "horizontal pecan, positive rotation: push +u end downward (+y)"
+      (let [{:keys [from to]} (gs/nudge-plan [500.0 400.0] 0.0 45.0 cfgp)]
+        ;; end at (520,400); push dir R90(u)=(0,1): from above it, to past it
+        (is (< (Math/abs (- (first from) 520.0)) 1e-6))
+        (is (< (Math/abs (- (second from) 370.0)) 1e-6))
+        (is (< (Math/abs (- (second to) 410.0)) 1e-6))))
+    (testing "negative rotation pushes the OPPOSITE end, same direction"
+      (let [{:keys [from]} (gs/nudge-plan [500.0 400.0] 0.0 -45.0 cfgp)]
+        (is (< (Math/abs (- (first from) 480.0)) 1e-6))
+        (is (< (Math/abs (- (second from) 370.0)) 1e-6))))
+    (testing "sweep passes through the end point"
+      (let [{:keys [from to]} (gs/nudge-plan [500.0 400.0] 90.0 30.0 cfgp)]
+        ;; u=(0,1): end at (500,420); p=R90(u)=(-1,0)
+        (is (< (Math/abs (- (second from) 420.0)) 1e-6))
+        (is (> (first from) 500.0))     ; approach from +x side
+        (is (< (first to) 500.0))))))   ; exit on -x side
+
 (deftest final-verdict-test
   (testing "a lifted verdict with a failed place check is downgraded"
     (is (= :lift-unverified (gs/final-verdict :lifted false))))
