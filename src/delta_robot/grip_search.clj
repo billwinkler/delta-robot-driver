@@ -31,15 +31,24 @@
    ;; cross probe fit had a poisoned y-column (occluded cross fix):
    ;; its 0.772 cross-term coupled y-error into runaway x-moves
    ;; (n8 oscillation, n9 verify circling).
-   :jinv [[0.58 0.14] [-0.19 0.66]]
-   ;; cross->grip-point compensation, scene px: servo target = pecan +
-   ;; comp. Since descend-verify-correct (2026-07-04) this is only the
-   ;; INITIAL guess — the verify loop measures the true jaw-gap-vs-
-   ;; pecan offset at grip depth every attempt — so after the
-   ;; 2026-07-05 camera re-aim it is simply zeroed rather than
-   ;; re-measured; expect the verify loop to eat 1-2 extra corrections
-   ;; on early attempts and refine from their logged checks if needed.
-   :comp-px [0.0 0.0]
+   ;; RE-FIT 2026-07-05 evening post arm-reattachment (kinematics
+   ;; changed: old J predicted +37 px y-coupling on a 79 mm x-move,
+   ;; reality is ~+8 px — photo-verified tool position error ~20 mm).
+   ;; 3-point open-jaw gap probe at depth: +30x -> (+56,+3) px,
+   ;; +25y -> (-8,+26.5) px.
+   :jinv [[0.53 0.16] [-0.05 0.93]]
+   ;; SERVO SIGNAL CHANGE (2026-07-05 night): the servo now tracks the
+   ;; JAW GAP-CENTER, not the laser cross. Post arm-reattachment the
+   ;; cross detection became unstable (rigid cross-gap offset swung
+   ;; +-60 px between frames; the tilted beams also shift ~42 px
+   ;; between hover and depth) while the gap tracked flawlessly. The
+   ;; cross was only ever a proxy for the gripper from before jaw
+   ;; tips were detectable; the gap IS the gripper. comp-px is now
+   ;; the HOVER->DEPTH tip parallax (gap_hover - gap_depth, measured
+   ;; at staging): servo the hover gap onto pecan+comp so the tips
+   ;; land ON the pecan when they descend. Re-measure after effector
+   ;; work: hover + depth capture at staging.
+   :comp-px [-4.0 -21.5]
    :hover-z 400
    :lift-z 385
    ;; servo tolerance is SCALE-BOUND: 8 px was 1.3 mm at the old
@@ -64,8 +73,10 @@
    ;; :orient-tol-deg: pecan major axis must be perpendicular to the
    ;; jaw closing axis within this, else :bad-orientation (no descend,
    ;; no bump — a human must reposition; the arm has no wrist)
-   :verify {:tol-px 15 :max-corrections 5 :pecan-radius-px 130
-            :gain 1.0 :orient-tol-deg 30}
+   ;; tol tightened 15->8 px (~4.5 mm) after n18: hard pads eject a
+   ;; convex nut at ~3.5 mm off-center — shrink the squirt window
+   :verify {:tol-px 8 :max-corrections 5 :pecan-radius-px 130
+            :gain 1.0 :orient-tol-deg 15}
    ;; workspace clamp for ALL commanded xy (CLI enforces its own too)
    :xy-bound 80
    ;; random deposit region (arm coords, comfortably on the platform)
@@ -254,9 +265,10 @@
   (let [{:keys [servo hover-z xy-bound]} cfg]
     (loop [xy start-xy, i 0]
       (let [v (vision! (str "servo-" i))
-            err (cross-error (:cross v) target)]
+            signal (:gap-center v)
+            err (cross-error signal target)]
         (cond
-          (nil? (:cross v)) {:status :no-cross :xy xy :iters i}
+          (nil? signal) {:status :no-gap :xy xy :iters i}
           (converged? err (:tol-px servo)) {:status :converged :xy xy
                                             :iters i :final-err err}
           (>= i (:max-iters servo)) {:status :max-iters :xy xy
