@@ -28,14 +28,18 @@ import numpy as np
 # rect swallows the strut/pen/clutter beside it. Corners measured
 # from the banked reference frame; POSE-BOUND like every pixel
 # constant here (see the tripwire check).
-PLATFORM_QUAD = np.array([(470, 140), (950, 390), (640, 760), (60, 420)],
+PLATFORM_QUAD = np.array([(430, 300), (880, 425), (690, 690), (205, 465)],
                          dtype=np.int32)
 EXPOSURE = 25        # starting guess; capture() adapts to ambient light
-LASER_EXPOSURE = 1   # laser-isolation frame; minimum, for daylight margin
+LASER_EXPOSURE = 2   # laser-isolation frame (exp=1 starves the lines:
+                     # in-quad max 148 vs saturated at exp=2)
 TARGET_MEAN = 150    # adaptive-exposure target for the normal frame
 MEAN_TOL = 30        # tight band: at mean ~200 the pecan's pixels rise
                      # above the dark threshold and detection fails
-PECAN_AREA = (500, 5000)
+PECAN_AREA = (350, 5000)  # floor lowered 2026-07-05: a laser stripe
+                          # across the pecan + bright exposure can
+                          # shrink the dark blob (nominal ~900 at the
+                          # rigid-mount scale, measured 540 split)
 PECAN_MAX_DIM = 110
 EDGE_MARGIN = 25     # min distance (px) from the quad boundary for a
                      # pecan centroid — rejects the corner tapes, which
@@ -80,12 +84,19 @@ def capture(save_path):
     clips the measured mean, so one scaling step can undershoot)."""
     dev = device()
     exp = EXPOSURE
+    qmask = None
     for _ in range(4):
         _grab(dev, max(1, int(round(exp))), save_path)
         g = cv2.imread(save_path, cv2.IMREAD_GRAYSCALE)
         if g is None:
             break
-        m = float(g.mean())
+        if qmask is None:
+            qmask = _quad_mask(g.shape)
+        # meter on the QUAD INTERIOR: the dark bench around the
+        # platform dilutes the full-frame mean and leaves the paper
+        # blown out (2026-07-05: frame mean 185 but in-quad 209 —
+        # pecan pixels rose above the dark threshold)
+        m = float(g[qmask > 0].mean())
         if abs(m - TARGET_MEAN) <= MEAN_TOL:
             break
         exp = min(5000.0, max(1.0, exp * TARGET_MEAN / max(m, 1.0)))
@@ -135,9 +146,7 @@ def _in_quad(x, y, margin=0.0):
     return d >= margin
 
 
-def _cross_at(gray, hough_threshold, min_line_length, max_line_gap):
-    roi = cv2.bitwise_and(gray, _quad_mask(gray.shape))
-    _, thr = cv2.threshold(roi, 215, 255, cv2.THRESH_BINARY)
+def _cross_from_binary(thr, hough_threshold, min_line_length, max_line_gap):
     thr = cv2.dilate(thr, np.ones((3, 3), np.uint8))
     segs = cv2.HoughLinesP(thr, 1, np.pi / 180, threshold=hough_threshold,
                            minLineLength=min_line_length,
@@ -166,6 +175,35 @@ def _cross_at(gray, hough_threshold, min_line_length, max_line_gap):
     return [round(float(xy[0]), 1), round(float(xy[1]), 1)]
 
 
+def _cross_at(gray, hough_threshold, min_line_length, max_line_gap,
+              bright_thr=215):
+    roi = cv2.bitwise_and(gray, _quad_mask(gray.shape))
+    _, thr = cv2.threshold(roi, bright_thr, 255, cv2.THRESH_BINARY)
+    return _cross_from_binary(thr, hough_threshold, min_line_length,
+                              max_line_gap)
+
+
+def find_cross_laser(laser_gray):
+    """Cross detection on the laser-isolation frame via RIDGE
+    isolation, not absolute brightness.
+
+    Exposure cannot separate the laser from sunlight — both scale
+    linearly, so their ratio is fixed (2026-07-05: sunlit paper ~130,
+    laser-painted line ~148 at exp=2; no threshold works). But the
+    lines are narrow RIDGES: subtracting a median-blurred background
+    removes slow sun gradients entirely and leaves the +20-unit
+    ridge. Works in any ambient light (at night the background is
+    already black and the residual is the laser unchanged).
+    Validated on the failing daylight frame: intersection [525.2
+    341.3] vs visible ~(510-525, 335)."""
+    bg = cv2.medianBlur(laser_gray, 31)
+    resid = cv2.bitwise_and(cv2.subtract(laser_gray, bg),
+                            _quad_mask(laser_gray.shape))
+    _, thr = cv2.threshold(resid, 12, 255, cv2.THRESH_BINARY)
+    return (_cross_from_binary(thr, 60, 80, 25)
+            or _cross_from_binary(thr, 40, 50, 40))
+
+
 def find_cross(gray):
     """Locate the laser-cross intersection: strict first, then a
     relaxed fallback for jaw-occluded crosses.
@@ -192,6 +230,9 @@ def find_pecan(gray):
     masked[_quad_mask(gray.shape) == 0] = 255
     _, dark = cv2.threshold(masked, 100, 255, cv2.THRESH_BINARY_INV)
     dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    # bridge the laser stripe: a pecan sitting ON the cross gets its
+    # dark blob bisected by the bright line (n12 :no-target)
+    dark = cv2.morphologyEx(dark, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
     cnts, _ = cv2.findContours(dark, cv2.RETR_EXTERNAL,
                                cv2.CHAIN_APPROX_SIMPLE)
     best, best_area = None, 0
@@ -355,14 +396,17 @@ def main():
         print(json.dumps({"error": f"unreadable frame {frame}"}))
         return 1
 
-    # cross: prefer the laser frame (near-black background, laser
-    # only); fall back to the normal frame so archive frames and a
-    # failed short capture still resolve
+    # cross: prefer the laser frame (dark background, laser only).
+    # The laser is the brightest thing in that frame BY CONSTRUCTION,
+    # so threshold relative to its own max instead of a fixed 215 —
+    # at exp=1 the lines peak ~180 and a fixed threshold finds
+    # nothing (2026-07-05). Fall back to the normal frame so archive
+    # frames and a failed short capture still resolve.
     cross = None
     if laser_frame is not None:
         laser_gray = cv2.imread(laser_frame, cv2.IMREAD_GRAYSCALE)
         if laser_gray is not None:
-            cross = find_cross(laser_gray)
+            cross = find_cross_laser(laser_gray)
     if cross is None:
         cross = find_cross(gray)
 

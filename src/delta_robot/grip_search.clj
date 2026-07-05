@@ -24,10 +24,14 @@
    :log-file "data/grip-attempts.edn"
    :frame-dir "data/grip-frames"
    ;; scene-camera Jacobian inverse, mm per px. POSE-BOUND: re-probe
-   ;; after any camera move (2 probe moves, ~30 s). Fit 2026-07-05
-   ;; after the re-aim (+20mm x -> (-96.6 +6.7) px; +20mm y ->
-   ;; (-114.6 -150.3) px; camera now ~6 px/mm, was ~2.5).
-   :jinv [[-0.1966 0.1499] [-0.0088 -0.1264]]
+   ;; after any camera move. Fit 2026-07-05 on the rigid mount by
+   ;; LEAST SQUARES over attempt n9's verify-loop (move -> jaw-gap
+   ;; displacement) pairs — measured at grip depth in the platform
+   ;; plane, i.e. exactly the operating regime. The earlier 2-point
+   ;; cross probe fit had a poisoned y-column (occluded cross fix):
+   ;; its 0.772 cross-term coupled y-error into runaway x-moves
+   ;; (n8 oscillation, n9 verify circling).
+   :jinv [[0.58 0.14] [-0.19 0.66]]
    ;; cross->grip-point compensation, scene px: servo target = pecan +
    ;; comp. Since descend-verify-correct (2026-07-04) this is only the
    ;; INITIAL guess — the verify loop measures the true jaw-gap-vs-
@@ -38,14 +42,27 @@
    :comp-px [0.0 0.0]
    :hover-z 400
    :lift-z 385
-   :servo {:gain 0.9 :tol-px 8 :max-iters 10 :max-step-mm 25}
+   ;; servo tolerance is SCALE-BOUND: 8 px was 1.3 mm at the old
+   ;; 6 px/mm camera; at the rigid mount's 1.8 px/mm it demanded
+   ;; ~4 mm from a coarse loop and oscillated just outside it
+   ;; (2026-07-05 n8: iters 5-8 all within 9-15 px). The cross servo
+   ;; only needs to deliver the arm near the pecan — the verify loop
+   ;; at grip depth is the precision stage. Gain lowered to damp
+   ;; oscillation from residual Jacobian error.
+   :servo {:gain 0.6 :tol-px 18 :max-iters 10 :max-step-mm 25}
    ;; descend-verify-correct (2026-07-04): at grip depth the jaw tips
    ;; and the pecan share the platform plane, so gap-center vs pecan
    ;; is a parallax-free error — measured, not calibrated. comp-px is
    ;; demoted to an initial guess for the cross servo.
    ;; :pecan-radius-px doubles as ghost rejection: a "pecan" further
    ;; than this from the jaws is a static dark blob, not the target.
-   :verify {:tol-px 12 :max-corrections 3 :pecan-radius-px 130}
+   ;; verify corrections run at FULL gain: the Jacobian is LS-fit
+   ;; from at-depth data, and every extra raise-descend cycle is
+   ;; another chance for an open jaw tip to clip and shove the pecan
+   ;; (n11 chased its own nudges to the workspace clamp). tol 15 px
+   ;; ~ 8 mm — 40 mm open jaws on a ~20 mm pecan still capture that.
+   :verify {:tol-px 15 :max-corrections 5 :pecan-radius-px 130
+            :gain 1.0}
    ;; workspace clamp for ALL commanded xy (CLI enforces its own too)
    :xy-bound 80
    ;; random deposit region (arm coords, comfortably on the platform)
@@ -243,7 +260,8 @@
           {:status :max-corrections :xy xy :k k :checks checks}
 
           :else
-          (let [mv (error->move err cfg servo)
+          (let [params (assoc servo :gain (:gain verify 1.0))
+                mv (error->move err cfg params)
                 nxt (next-position xy mv xy-bound)]
             ;; retreat to hover before moving sideways
             (motion/move-to (first xy) (second xy) hover-z)
