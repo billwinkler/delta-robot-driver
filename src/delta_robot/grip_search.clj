@@ -112,6 +112,20 @@
   (when (and gap pecan)
     [(- (first pecan) (first gap)) (- (second pecan) (second gap))]))
 
+(defn final-verdict
+  "Positive-evidence upgrade of the lift verdict (added after n7,
+  2026-07-04: the from-home 'platform is empty' check reported :lifted
+  while the operator was briefly holding the pecan — absence of the
+  pecan is NOT evidence it is in the jaws). A :lifted verdict is
+  confirmed only when the deposited pecan is later detected near the
+  spot the deposit aimed at (:placed true). :placed false downgrades
+  to :lift-unverified; :placed nil (aim cross not measurable) keeps
+  :lifted but the log carries the gap in evidence."
+  [lift-verdict placed?]
+  (if (and (= :lifted lift-verdict) (false? placed?))
+    :lift-unverified
+    lift-verdict))
+
 (defn validate-params [{:keys [mm z-grip pause-ms dx-px dy-px]}]
   (cond
     (not (<= 12 mm 40)) (str "mm must be 12..40, got " mm)
@@ -325,17 +339,31 @@
                                   v (verdict (:pecan lift-v))
                                   deposit (when (= v :lifted)
                                             (random-deposit (:deposit cfg) rand))
-                                  placed (when deposit
-                                           (let [[dx dy] deposit]
-                                             (motion/move-to dx dy (:hover-z cfg))
-                                             (motion/move-to dx dy 417)
-                                             (gripper/open)
-                                             (motion/move-to dx dy (:hover-z cfg))
-                                             (motion/home)
-                                             (vision! "deposit-check")))]
+                                  place (when deposit
+                                          (let [[dx dy] deposit]
+                                            (motion/move-to dx dy (:hover-z cfg))
+                                            ;; the cross marks where the jaws
+                                            ;; point: capture the aim BEFORE
+                                            ;; releasing — the pecan must be
+                                            ;; found near this spot afterward
+                                            (let [aim (:cross (vision! "deposit-aim"))]
+                                              (motion/move-to dx dy 417)
+                                              (gripper/open)
+                                              (motion/move-to dx dy (:hover-z cfg))
+                                              (motion/home)
+                                              (let [check (vision! "deposit-check")
+                                                    found (:pecan check)]
+                                                {:aim aim
+                                                 :pecan found
+                                                 :placed (when aim
+                                                           (boolean
+                                                            (pecan-near-gap
+                                                             found aim
+                                                             (get-in cfg [:verify :pecan-radius-px]))))}))))
+                                  v-final (final-verdict v (:placed place))]
                               (when (= v :dropped) (gripper/open))
                               (motion/home)
-                              (finish! {:verdict v
+                              (finish! {:verdict v-final
                                         :pre (select-keys pre [:pecan :cross])
                                         :target target
                                         :servo (select-keys servo [:iters :final-err :xy])
@@ -343,5 +371,4 @@
                                         :grip-vision grip-v
                                         :lift-vision lift-v
                                         :deposit deposit
-                                        :deposit-check (when placed
-                                                         (select-keys placed [:pecan]))}))))))))))))))))
+                                        :place place}))))))))))))))))

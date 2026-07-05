@@ -67,6 +67,17 @@
     (is (nil? (gs/pecan-near-gap nil [858.0 506.5] 130)))
     (is (nil? (gs/pecan-near-gap [860.0 540.0] nil 130)))))
 
+(deftest final-verdict-test
+  (testing "a lifted verdict with a failed place check is downgraded"
+    (is (= :lift-unverified (gs/final-verdict :lifted false))))
+  (testing "a confirmed place keeps :lifted"
+    (is (= :lifted (gs/final-verdict :lifted true))))
+  (testing "an unmeasurable aim (nil) keeps :lifted"
+    (is (= :lifted (gs/final-verdict :lifted nil))))
+  (testing "non-lift verdicts pass through untouched"
+    (is (= :dropped (gs/final-verdict :dropped nil)))
+    (is (= :missed (gs/final-verdict :missed false)))))
+
 (deftest gap-error-test
   (testing "error is pecan - gap (drive the gap onto the pecan)"
     (is (= [2.0 33.5] (gs/gap-error [858.0 506.5] [860.0 540.0])))
