@@ -49,6 +49,15 @@
    ;; land ON the pecan when they descend. Re-measure after effector
    ;; work: hover + depth capture at staging.
    :comp-px [-4.0 -21.5]
+   ;; PECAN HEIGHT PARALLAX (Bill's catch, 2026-07-05 night, from a
+   ;; zoomed photo: "the gripper is always offset from center"): the
+   ;; pecan's image CENTROID rides ~8.5 mm up the nut and projects
+   ;; camera-away from its true FOOTPRINT center on the platform —
+   ;; while the jaw tips are measured at platform level. Every
+   ;; "converged" close was ~5-14 mm off, always the same direction.
+   ;; Derived from the measured tip parallax ((-4,-21.5) px per 14 mm
+   ;; of height): footprint = centroid + 8.5/14 * (4, 21.5).
+   :pecan-height-comp-px [2.4 13.1]
    :hover-z 400
    :lift-z 385
    ;; servo tolerance is SCALE-BOUND: 8 px was 1.3 mm at the old
@@ -95,6 +104,14 @@
   [pecan [cx cy] [nx ny]]
   (when pecan
     [(+ (first pecan) cx nx) (+ (second pecan) cy ny)]))
+
+(defn footprint
+  "Project a pecan image CENTROID down to its platform FOOTPRINT
+  center (see :pecan-height-comp-px). Every aiming target must use
+  the footprint; the raw centroid is only right for detection radii."
+  [pecan]
+  (when pecan
+    (mapv + pecan (:pecan-height-comp-px cfg))))
 
 (defn cross-error
   "Pixel error the servo must null: target - cross."
@@ -310,7 +327,7 @@
             gap (:gap-center v)
             seen (pecan-near-gap (:pecan v) gap pecan-radius-px)
             pecan (or seen (pecan-near-gap pre-pecan gap pecan-radius-px))
-            err (gap-error gap pecan)
+            err (gap-error gap (footprint pecan))
             orient-ok (if (and seen (:jaws v) (:pecan-angle v))
                         (graspable? (:jaws v) (:pecan-angle v)
                                     orient-tol-deg)
@@ -418,7 +435,7 @@
                  :final-angle angle :nudges nudges}
 
                 :else
-                (let [plan (nudge-plan pecan angle need plan-cfg)
+                (let [plan (nudge-plan (footprint pecan) angle need plan-cfg)
                       ;; anchor px->arm at staging: arm(p) ~ staging +
                       ;; Jinv*(p - gap0) — coarse is fine, the loop
                       ;; re-measures after every sweep
@@ -501,7 +518,7 @@
           (gripper/open)
           (motion/home)
           (let [pre (vision! "precheck")
-                target (servo-target (:pecan pre) (:comp-px cfg)
+                target (servo-target (footprint (:pecan pre)) (:comp-px cfg)
                                      [dx-px dy-px])]
             (if-not target
               (finish! {:verdict :no-target :pre pre})
