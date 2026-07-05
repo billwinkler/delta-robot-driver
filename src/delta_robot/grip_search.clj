@@ -85,7 +85,13 @@
    ;; tol tightened 15->8 px (~4.5 mm) after n18: hard pads eject a
    ;; convex nut at ~3.5 mm off-center — shrink the squirt window
    :verify {:tol-px 8 :max-corrections 5 :pecan-radius-px 130
-            :gain 1.0 :orient-tol-deg 15}
+            :gain 1.0
+            ;; 45 = advisory-grade: the perpendicularity test compares
+            ;; IMAGE angles, and the oblique camera distorts them (a
+            ;; pecan Bill judged perfectly graspable read 55 deg).
+            ;; Proper fix is a platform homography; until then only
+            ;; block egregious long-axis-along-jaws cases.
+            :orient-tol-deg 45}
    ;; workspace clamp for ALL commanded xy (CLI enforces its own too)
    :xy-bound 80
    ;; random deposit region (arm coords, comfortably on the platform)
@@ -550,7 +556,7 @@
                                       :servo (select-keys servo [:iters :final-err :xy])
                                       :verify vr-log}))
                         (do
-                          (gripper/grip mm)
+                          (gripper/grip-hold mm)
                       (Thread/sleep 200)
                       (let [grip-v (vision! "grip")
                             last-gap (or (:gap-center grip-v)
