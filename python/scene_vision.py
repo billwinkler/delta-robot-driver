@@ -23,20 +23,31 @@ import tempfile
 import cv2
 import numpy as np
 
-# platform region in scene pixels [y0, y1, x0, x1]
-ROI = (360, 740, 450, 1240)
-EXPOSURE = 25
+# Platform mask: a QUADRILATERAL, not a rect — the re-aimed camera
+# (2026-07-05) sees the platform rotated in frame, and any bounding
+# rect swallows the strut/pen/clutter beside it. Corners measured
+# from the banked reference frame; POSE-BOUND like every pixel
+# constant here (see the tripwire check).
+PLATFORM_QUAD = np.array([(470, 140), (950, 390), (640, 760), (60, 420)],
+                         dtype=np.int32)
+EXPOSURE = 25        # starting guess; capture() adapts to ambient light
+LASER_EXPOSURE = 1   # laser-isolation frame; minimum, for daylight margin
+TARGET_MEAN = 150    # adaptive-exposure target for the normal frame
+MEAN_TOL = 30        # tight band: at mean ~200 the pecan's pixels rise
+                     # above the dark threshold and detection fails
 PECAN_AREA = (500, 5000)
 PECAN_MAX_DIM = 110
-EDGE_MARGIN = 55
+EDGE_MARGIN = 25     # min distance (px) from the quad boundary for a
+                     # pecan centroid — rejects the corner tapes, which
+                     # sit ON the boundary
 # Static dark blobs INTERIOR to the ROI that pass the pecan filters
-# (scene px, measured). Re-measure if the camera or platform moves.
-# - [552.6, 456.1]: platform top-left tape corner; stole the first
-#   genuine :lifted verdict (empty platform, "pecan" = tape).
-# - [541.4, 599.3]: platform mounting hole; won find_pecan in 4/222
-#   archive frames (only when the real pecan was jaw-merged) and sent
-#   live-verify n6 into a false :assume-contact.
-STATIC_BLOBS = [(552.6, 456.1), (541.4, 599.3)]
+# (scene px, measured). POSE-BOUND: re-measure whenever the camera
+# moves. History (old pose, 2026-07-04): the tape corner at
+# [552.6, 456.1] stole the first genuine :lifted verdict; the
+# mounting hole at [541.4, 599.3] caused n6's false :assume-contact.
+# Cleared 2026-07-05 after the camera re-aim; re-derived empirically
+# from empty-platform frames at the new pose.
+STATIC_BLOBS = []
 STATIC_BLOB_R = 18
 
 
@@ -47,11 +58,10 @@ def device():
     return paths[0]
 
 
-def capture(save_path):
-    dev = device()
+def _grab(dev, exposure, save_path):
     subprocess.run(
         ["v4l2-ctl", "-d", dev, "--set-ctrl=auto_exposure=1",
-         f"--set-ctrl=exposure_time_absolute={EXPOSURE}"],
+         f"--set-ctrl=exposure_time_absolute={exposure}"],
         check=True, capture_output=True)
     subprocess.run(
         ["v4l2-ctl", "-d", dev,
@@ -60,6 +70,41 @@ def capture(save_path):
          f"--stream-to={save_path}"],
         check=True, capture_output=True)
     return save_path
+
+
+def capture(save_path):
+    """Adaptive-exposure capture: the fixed exp=25 silently assumed
+    the evening-lit hangar; daylight saturates it (2026-07-05, mean
+    244/255). The sensor is linear in exposure_time_absolute, so
+    scale toward TARGET_MEAN, re-grabbing up to 3 times (saturation
+    clips the measured mean, so one scaling step can undershoot)."""
+    dev = device()
+    exp = EXPOSURE
+    for _ in range(4):
+        _grab(dev, max(1, int(round(exp))), save_path)
+        g = cv2.imread(save_path, cv2.IMREAD_GRAYSCALE)
+        if g is None:
+            break
+        m = float(g.mean())
+        if abs(m - TARGET_MEAN) <= MEAN_TOL:
+            break
+        exp = min(5000.0, max(1.0, exp * TARGET_MEAN / max(m, 1.0)))
+    return save_path
+
+
+def capture_pair(save_path):
+    """Two-exposure capture (2026-07-05 scheme): a short-exposure
+    frame where only the self-luminous laser cross survives, then the
+    adaptive normal frame for pecan/jaw detection. Cross detection on
+    the laser frame sees a dark background — no paper reflections,
+    no lighting banding, no ambient-light assumption. The laser frame
+    lands next to the normal frame as <save>-laser.jpg."""
+    dev = device()
+    base, ext = (save_path.rsplit(".", 1) + ["jpg"])[:2]
+    laser_path = f"{base}-laser.{ext}"
+    _grab(dev, LASER_EXPOSURE, laser_path)
+    capture(save_path)
+    return save_path, laser_path
 
 
 def _line_from_points(pts):
@@ -76,11 +121,22 @@ def _intersect(p1, d1, p2, d2):
     return p1 + t * d1
 
 
+def _quad_mask(shape):
+    mask = np.zeros(shape[:2], dtype=np.uint8)
+    cv2.fillPoly(mask, [PLATFORM_QUAD], 255)
+    return mask
+
+
+def _in_quad(x, y, margin=0.0):
+    """Signed distance test: True if (x,y) is at least margin px
+    inside the platform quad."""
+    d = cv2.pointPolygonTest(PLATFORM_QUAD.astype(np.float32),
+                             (float(x), float(y)), True)
+    return d >= margin
+
+
 def _cross_at(gray, hough_threshold, min_line_length, max_line_gap):
-    y0, y1, x0, x1 = ROI
-    mask = np.zeros_like(gray)
-    mask[y0:y1, x0:x1] = 255
-    roi = cv2.bitwise_and(gray, mask)
+    roi = cv2.bitwise_and(gray, _quad_mask(gray.shape))
     _, thr = cv2.threshold(roi, 215, 255, cv2.THRESH_BINARY)
     thr = cv2.dilate(thr, np.ones((3, 3), np.uint8))
     segs = cv2.HoughLinesP(thr, 1, np.pi / 180, threshold=hough_threshold,
@@ -105,7 +161,7 @@ def _cross_at(gray, hough_threshold, min_line_length, max_line_gap):
     p1, d1 = _line_from_points(pts0)
     p2, d2 = _line_from_points(pts1)
     xy = _intersect(p1, d1, p2, d2)
-    if not (x0 <= xy[0] <= x1 and y0 <= xy[1] <= y1):
+    if not _in_quad(xy[0], xy[1]):
         return None
     return [round(float(xy[0]), 1), round(float(xy[1]), 1)]
 
@@ -130,9 +186,11 @@ def find_cross(gray):
 
 
 def find_pecan(gray):
-    y0, y1, x0, x1 = ROI
-    region = gray[y0:y1, x0:x1]
-    _, dark = cv2.threshold(region, 100, 255, cv2.THRESH_BINARY_INV)
+    masked = cv2.bitwise_and(gray, _quad_mask(gray.shape))
+    # outside-quad pixels are 0 after masking, which reads as "dark";
+    # paint them bright so the inverse threshold ignores them
+    masked[_quad_mask(gray.shape) == 0] = 255
+    _, dark = cv2.threshold(masked, 100, 255, cv2.THRESH_BINARY_INV)
     dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
     cnts, _ = cv2.findContours(dark, cv2.RETR_EXTERNAL,
                                cv2.CHAIN_APPROX_SIMPLE)
@@ -144,28 +202,29 @@ def find_pecan(gray):
         bx, by, bw, bh = cv2.boundingRect(c)
         if bw > PECAN_MAX_DIM or bh > PECAN_MAX_DIM:
             continue
-        if by <= 2:  # touches ROI top edge -> jaw/arm shadow, not pecan
-            continue
         m = cv2.moments(c)
         cx, cy = m["m10"] / m["m00"], m["m01"] / m["m00"]
-        # platform corner tape triangles hug the ROI edges; real pecans
-        # (and all deposit spots) are interior
-        if (cx < EDGE_MARGIN or cy < EDGE_MARGIN
-                or (x1 - x0) - cx < EDGE_MARGIN
-                or (y1 - y0) - cy < EDGE_MARGIN):
+        # real pecans (and all deposit spots) are interior; the corner
+        # tapes sit ON the quad boundary and fail the margin test
+        if not _in_quad(cx, cy, EDGE_MARGIN):
+            continue
+        # a pecan's contour is FULLY interior; jaws and arm shadows
+        # pierce the boundary and get clipped against it (the quad
+        # replacement for the old "touches ROI top edge" jaw test)
+        if any(not _in_quad(float(p[0][0]), float(p[0][1]), 3)
+               for p in c[::4]):
             continue
         # known static dark blobs are never the pecan
-        if any((cx + x0 - sx) ** 2 + (cy + y0 - sy) ** 2 <= STATIC_BLOB_R ** 2
+        if any((cx - sx) ** 2 + (cy - sy) ** 2 <= STATIC_BLOB_R ** 2
                for sx, sy in STATIC_BLOBS):
             continue
         if area > best_area:
-            best = [round(cx + x0, 1), round(cy + y0, 1)]
+            best = [round(cx, 1), round(cy, 1)]
             best_area = area
     return best
 
 
 MIN_JAW_HEIGHT = 60   # px: jaw fingers are tall; pecans are not
-TOP_ATTACH = 12       # jaw component must start this close to ROI top
 MIN_FINGER_WIDTH = 8  # px: ignore skinny noise columns
 JAW_SIDE_MARGIN = 40  # px: the perforated strut enters from the sides
 JAW_PAIR_DX = (20, 150)   # tip separation range, px
@@ -189,17 +248,26 @@ def find_jaw_tips(gray):
 
     Returns (tips, gap_center) or (None, None).
     """
-    y0, y1, x0, x1 = ROI
-    region = gray[y0:y1, x0:x1]
-    _, dark = cv2.threshold(region, 100, 255, cv2.THRESH_BINARY_INV)
+    # full-frame dark components; a JAW is one that overlaps the
+    # platform quad but PIERCES its boundary from outside (the quad
+    # replacement for the old "hangs from the ROI top edge" test —
+    # exactly the property find_pecan uses to reject them)
+    _, dark = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
     dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    qmask = _quad_mask(gray.shape)
 
     n, labels, stats, _ = cv2.connectedComponentsWithStats(dark)
     jaw_mask = np.zeros_like(dark)
     for i in range(1, n):
-        if (stats[i, cv2.CC_STAT_TOP] <= TOP_ATTACH
-                and stats[i, cv2.CC_STAT_HEIGHT] >= MIN_JAW_HEIGHT):
-            jaw_mask[labels == i] = 255
+        if stats[i, cv2.CC_STAT_HEIGHT] < MIN_JAW_HEIGHT:
+            continue
+        comp = labels == i
+        inside = int(np.count_nonzero(comp & (qmask > 0)))
+        outside = int(np.count_nonzero(comp & (qmask == 0)))
+        if inside >= 50 and outside >= 50:      # pierces the boundary
+            jaw_mask[comp] = 255
+    # only the in-quad part of the jaws matters for tip finding
+    jaw_mask = cv2.bitwise_and(jaw_mask, qmask)
     if not jaw_mask.any():
         return None, None
 
@@ -241,11 +309,9 @@ def find_jaw_tips(gray):
                 merged[-1] = t
         else:
             merged.append(t)
-    # a "tip" at the ROI bottom is a shadow column; one hugging a side
-    # edge is the perforated strut — neither is a jaw
-    merged = [t for t in merged
-              if t[1] < (y1 - y0) - 5
-              and JAW_SIDE_MARGIN <= t[0] <= (x1 - x0) - JAW_SIDE_MARGIN]
+    # jaw tips hang INTO the quad: a "tip" hugging the boundary is a
+    # clipped shadow column or the strut, not a jaw
+    merged = [t for t in merged if _in_quad(t[0], t[1], JAW_SIDE_MARGIN)]
     if len(merged) < 2:
         return None, None
     # deepest valid PAIR: plausibly separated, similar height
@@ -263,7 +329,7 @@ def find_jaw_tips(gray):
     if not best:
         return None, None
 
-    tips_abs = [[round(float(tx + x0), 1), round(float(ty + y0), 1)]
+    tips_abs = [[round(float(tx), 1), round(float(ty), 1)]
                 for tx, ty in best]
     gap = [round((tips_abs[0][0] + tips_abs[1][0]) / 2, 1),
            round((tips_abs[0][1] + tips_abs[1][1]) / 2, 1)]
@@ -274,23 +340,39 @@ def main():
     args = sys.argv[1:]
     frame = None
     save = None
+    laser_frame = None
     if "--frame" in args:
         frame = args[args.index("--frame") + 1]
+    if "--laser-frame" in args:
+        laser_frame = args[args.index("--laser-frame") + 1]
     if "--save" in args:
         save = args[args.index("--save") + 1]
     if frame is None:
         frame = save or tempfile.mktemp(suffix=".jpg", prefix="scene-")
-        capture(frame)
+        frame, laser_frame = capture_pair(frame)
     gray = cv2.imread(frame, cv2.IMREAD_GRAYSCALE)
     if gray is None:
         print(json.dumps({"error": f"unreadable frame {frame}"}))
         return 1
+
+    # cross: prefer the laser frame (near-black background, laser
+    # only); fall back to the normal frame so archive frames and a
+    # failed short capture still resolve
+    cross = None
+    if laser_frame is not None:
+        laser_gray = cv2.imread(laser_frame, cv2.IMREAD_GRAYSCALE)
+        if laser_gray is not None:
+            cross = find_cross(laser_gray)
+    if cross is None:
+        cross = find_cross(gray)
+
     jaws, gap = find_jaw_tips(gray)
-    print(json.dumps({"cross": find_cross(gray),
+    print(json.dumps({"cross": cross,
                       "pecan": find_pecan(gray),
                       "jaws": jaws,
                       "gap-center": gap,
-                      "frame": frame}))
+                      "frame": frame,
+                      "laser-frame": laser_frame}))
     return 0
 
 

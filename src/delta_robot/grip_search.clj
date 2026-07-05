@@ -23,12 +23,19 @@
    :vision-script "python/scene_vision.py"
    :log-file "data/grip-attempts.edn"
    :frame-dir "data/grip-frames"
-   ;; scene-camera Jacobian inverse, mm per px (fit 2026-07-04)
-   :jinv [[0.412 0.147] [-0.203 0.642]]
-   ;; cross->grip-point compensation, scene px: servo target = pecan + comp.
-   ;; Measured 2026-07-04 from a closed-jaws-at-grip-height frame:
-   ;; jaw-gap center (942,500), cross (974,515) -> cross leads by (+32,+15)
-   :comp-px [32.0 15.0]
+   ;; scene-camera Jacobian inverse, mm per px. POSE-BOUND: re-probe
+   ;; after any camera move (2 probe moves, ~30 s). Fit 2026-07-05
+   ;; after the re-aim (+20mm x -> (-96.6 +6.7) px; +20mm y ->
+   ;; (-114.6 -150.3) px; camera now ~6 px/mm, was ~2.5).
+   :jinv [[-0.1966 0.1499] [-0.0088 -0.1264]]
+   ;; cross->grip-point compensation, scene px: servo target = pecan +
+   ;; comp. Since descend-verify-correct (2026-07-04) this is only the
+   ;; INITIAL guess — the verify loop measures the true jaw-gap-vs-
+   ;; pecan offset at grip depth every attempt — so after the
+   ;; 2026-07-05 camera re-aim it is simply zeroed rather than
+   ;; re-measured; expect the verify loop to eat 1-2 extra corrections
+   ;; on early attempts and refine from their logged checks if needed.
+   :comp-px [0.0 0.0]
    :hover-z 400
    :lift-z 385
    :servo {:gain 0.9 :tol-px 8 :max-iters 10 :max-step-mm 25}
