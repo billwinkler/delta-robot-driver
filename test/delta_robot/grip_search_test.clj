@@ -67,6 +67,27 @@
     (is (nil? (gs/pecan-near-gap nil [858.0 506.5] 130)))
     (is (nil? (gs/pecan-near-gap [860.0 540.0] nil 130)))))
 
+(deftest graspable?-test
+  (let [tips-h [[400.0 500.0] [460.0 500.0]]]   ; closing axis at 0 deg
+    (testing "major axis perpendicular to the closing axis = graspable"
+      (is (gs/graspable? tips-h 90.0 30))
+      (is (gs/graspable? tips-h 70.0 30))     ; 70 deg off-axis, within tol
+      (is (gs/graspable? tips-h 110.0 30)))
+    (testing "long axis along the closing direction = jaws on the ends"
+      (is (not (gs/graspable? tips-h 0.0 30)))
+      (is (not (gs/graspable? tips-h 20.0 30)))
+      (is (not (gs/graspable? tips-h 170.0 30))))  ; 170 ~ 10 deg undirected
+    (testing "boundary: exactly at tolerance passes"
+      (is (gs/graspable? tips-h 60.0 30))
+      (is (not (gs/graspable? tips-h 59.0 30)))))
+  (testing "diagonal closing axis"
+    (let [tips-d [[400.0 400.0] [450.0 450.0]]]  ; 45 deg
+      (is (gs/graspable? tips-d 135.0 30))
+      (is (not (gs/graspable? tips-d 45.0 30)))))
+  (testing "unmeasurable inputs -> nil (caller treats as don't-block)"
+    (is (nil? (gs/graspable? [nil [460.0 500.0]] 90.0 30)))
+    (is (nil? (gs/graspable? [[400.0 500.0] [460.0 500.0]] nil 30)))))
+
 (deftest final-verdict-test
   (testing "a lifted verdict with a failed place check is downgraded"
     (is (= :lift-unverified (gs/final-verdict :lifted false))))

@@ -61,8 +61,11 @@
    ;; another chance for an open jaw tip to clip and shove the pecan
    ;; (n11 chased its own nudges to the workspace clamp). tol 15 px
    ;; ~ 8 mm — 40 mm open jaws on a ~20 mm pecan still capture that.
+   ;; :orient-tol-deg: pecan major axis must be perpendicular to the
+   ;; jaw closing axis within this, else :bad-orientation (no descend,
+   ;; no bump — a human must reposition; the arm has no wrist)
    :verify {:tol-px 15 :max-corrections 5 :pecan-radius-px 130
-            :gain 1.0}
+            :gain 1.0 :orient-tol-deg 30}
    ;; workspace clamp for ALL commanded xy (CLI enforces its own too)
    :xy-bound 80
    ;; random deposit region (arm coords, comfortably on the platform)
@@ -135,6 +138,27 @@
   [gap pecan]
   (when (and gap pecan)
     [(- (first pecan) (first gap)) (- (second pecan) (second gap))]))
+
+(defn graspable?
+  "Is the pecan oriented so the jaws can capture its waist?
+
+  The wristless delta arm closes its jaws along a fixed axis — the
+  line between the two jaw tips. The pecan is an ellipsoid: only its
+  ~20 mm waist fits the jaws; if its LONG axis lies along the closing
+  direction the jaws meet the tapered ends and slip is guaranteed
+  (Bill's observation, 2026-07-05 — and any effector bump can roll it
+  into that state). Graspable = pecan major axis perpendicular to the
+  tip-to-tip line within tol degrees. Angles in image degrees, both
+  measured from the same frame, so camera pose cancels out."
+  [[tip1 tip2] pecan-angle tol-deg]
+  (when (and tip1 tip2 pecan-angle)
+    (let [jaw-deg (Math/toDegrees
+                   (Math/atan2 (- (second tip2) (second tip1))
+                               (- (first tip2) (first tip1))))
+          ;; difference of undirected axes, folded into [0, 90]
+          d (Math/abs (rem (- pecan-angle jaw-deg) 180.0))
+          d (min d (- 180.0 d))]
+      (>= d (- 90.0 tol-deg)))))
 
 (defn final-verdict
   "Positive-evidence upgrade of the lift verdict (added after n7,
@@ -226,7 +250,8 @@
   measurement for the attempts log (Phase-4 training data)."
   [start-xy z-grip pre-pecan]
   (let [{:keys [verify hover-z xy-bound servo]} cfg
-        {:keys [tol-px max-corrections pecan-radius-px]} verify]
+        {:keys [tol-px max-corrections pecan-radius-px
+                orient-tol-deg]} verify]
     (loop [xy start-xy, k 0, checks []]
       (motion/move-to (first xy) (second xy) z-grip)
       (let [v (vision! (str "verify-" k))
@@ -234,9 +259,15 @@
             seen (pecan-near-gap (:pecan v) gap pecan-radius-px)
             pecan (or seen (pecan-near-gap pre-pecan gap pecan-radius-px))
             err (gap-error gap pecan)
+            orient-ok (if (and seen (:jaws v) (:pecan-angle v))
+                        (graspable? (:jaws v) (:pecan-angle v)
+                                    orient-tol-deg)
+                        true)   ; can't measure -> don't block
             check {:k k :xy xy :gap gap :pecan (:pecan v)
                    :near-pecan pecan
                    :pecan-src (cond seen :frame pecan :pre :else nil)
+                   :pecan-angle (:pecan-angle v)
+                   :graspable orient-ok
                    :err err}
             checks (conj checks check)]
         (cond
@@ -245,6 +276,13 @@
           ;; frame + lift verdict tell the truth
           (nil? gap)
           {:status :assume-contact :xy xy :k k :checks checks}
+
+          ;; the pecan's long axis lies along the closing direction:
+          ;; the jaws would meet the tapered ends. No parameter fixes
+          ;; this and further descents only roll it more — stop and
+          ;; report so the operator repositions.
+          (not orient-ok)
+          {:status :bad-orientation :xy xy :k k :checks checks}
 
           ;; jaws measured but neither the frame's pecan nor the
           ;; pre-servo position is anywhere near them -> the target
@@ -333,7 +371,17 @@
                                                       (:pecan pre))
                           [x y] (:xy vr)
                           vr-log (select-keys vr [:status :k :checks])]
-                      (gripper/grip mm)
+                      (if (= :bad-orientation (:status vr))
+                        ;; jaws would meet the tapered ends — no close,
+                        ;; no lift; a human must reorient the pecan
+                        (do (motion/home)
+                            (finish! {:verdict :bad-orientation
+                                      :pre (select-keys pre [:pecan :cross])
+                                      :target target
+                                      :servo (select-keys servo [:iters :final-err :xy])
+                                      :verify vr-log}))
+                        (do
+                          (gripper/grip mm)
                       (Thread/sleep 200)
                       (let [grip-v (vision! "grip")
                             last-gap (or (:gap-center grip-v)
@@ -396,4 +444,4 @@
                                         :grip-vision grip-v
                                         :lift-vision lift-v
                                         :deposit deposit
-                                        :place place}))))))))))))))))
+                                        :place place}))))))))))))))))))

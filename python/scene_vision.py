@@ -85,7 +85,7 @@ def capture(save_path):
     dev = device()
     exp = EXPOSURE
     qmask = None
-    for _ in range(4):
+    for _ in range(6):
         _grab(dev, max(1, int(round(exp))), save_path)
         g = cv2.imread(save_path, cv2.IMREAD_GRAYSCALE)
         if g is None:
@@ -99,7 +99,12 @@ def capture(save_path):
         m = float(g[qmask > 0].mean())
         if abs(m - TARGET_MEAN) <= MEAN_TOL:
             break
-        exp = min(5000.0, max(1.0, exp * TARGET_MEAN / max(m, 1.0)))
+        if m > 235:
+            # saturated: the measured mean under-reports true
+            # brightness, so proportional stepping stalls — cut hard
+            exp = max(1.0, exp * 0.25)
+        else:
+            exp = min(5000.0, max(1.0, exp * TARGET_MEAN / max(m, 1.0)))
     return save_path
 
 
@@ -224,18 +229,24 @@ def find_cross(gray):
 
 
 def find_pecan(gray):
-    masked = cv2.bitwise_and(gray, _quad_mask(gray.shape))
+    qmask = _quad_mask(gray.shape)
+    masked = cv2.bitwise_and(gray, qmask)
     # outside-quad pixels are 0 after masking, which reads as "dark";
     # paint them bright so the inverse threshold ignores them
-    masked[_quad_mask(gray.shape) == 0] = 255
-    _, dark = cv2.threshold(masked, 100, 255, cv2.THRESH_BINARY_INV)
+    masked[qmask == 0] = 255
+    # MEDIAN-RELATIVE dark threshold (the 2025 detector's trick): a
+    # fixed 100 breaks when residual over-exposure lifts the pecan's
+    # pixels — 0.62x the in-quad median tracks the paper's actual
+    # brightness in any ambient light, clamped to sane bounds
+    thr_val = max(60, min(115, int(0.62 * float(np.median(gray[qmask > 0])))))
+    _, dark = cv2.threshold(masked, thr_val, 255, cv2.THRESH_BINARY_INV)
     dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
     # bridge the laser stripe: a pecan sitting ON the cross gets its
     # dark blob bisected by the bright line (n12 :no-target)
     dark = cv2.morphologyEx(dark, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
     cnts, _ = cv2.findContours(dark, cv2.RETR_EXTERNAL,
                                cv2.CHAIN_APPROX_SIMPLE)
-    best, best_area = None, 0
+    best, best_area, best_contour = None, 0, None
     for c in cnts:
         area = cv2.contourArea(c)
         if not (PECAN_AREA[0] <= area <= PECAN_AREA[1]):
@@ -262,7 +273,23 @@ def find_pecan(gray):
         if area > best_area:
             best = [round(cx, 1), round(cy, 1)]
             best_area = area
-    return best
+            best_contour = c
+    if best is None:
+        return None, None
+    # orientation: the pecan is an ellipsoid and the wristless delta
+    # arm closes its jaws along a FIXED axis — the major-axis angle
+    # decides graspability (2026-07-05, Bill's observation: a bump
+    # that rolls the long axis into the closing direction makes the
+    # grab impossible until a human repositions it)
+    # major-axis angle from central moments (unambiguous, unlike
+    # fitEllipse's rotation convention): theta maximizes the second
+    # moment; degrees in [0, 180), image coordinates
+    mm = cv2.moments(best_contour)
+    angle = None
+    if mm["m00"] > 0 and (mm["mu20"] != mm["mu02"] or mm["mu11"] != 0):
+        theta = 0.5 * np.arctan2(2 * mm["mu11"], mm["mu20"] - mm["mu02"])
+        angle = round(float(np.degrees(theta)) % 180.0, 1)
+    return best, angle
 
 
 MIN_JAW_HEIGHT = 60   # px: jaw fingers are tall; pecans are not
@@ -411,8 +438,10 @@ def main():
         cross = find_cross(gray)
 
     jaws, gap = find_jaw_tips(gray)
+    pecan, pecan_angle = find_pecan(gray)
     print(json.dumps({"cross": cross,
-                      "pecan": find_pecan(gray),
+                      "pecan": pecan,
+                      "pecan-angle": pecan_angle,
                       "jaws": jaws,
                       "gap-center": gap,
                       "frame": frame,
