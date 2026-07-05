@@ -1,3 +1,4 @@
 /src/delta_robot/tmp.clj
 python/.venv
 capture-*.jpg
+python/__pycache__/
