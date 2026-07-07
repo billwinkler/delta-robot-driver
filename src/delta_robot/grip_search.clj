@@ -36,7 +36,12 @@
    ;; reality is ~+8 px — photo-verified tool position error ~20 mm).
    ;; 3-point open-jaw gap probe at depth: +30x -> (+56,+3) px,
    ;; +25y -> (-8,+26.5) px.
-   :jinv [[0.53 0.16] [-0.05 0.93]]
+   ;; RE-FIT 2026-07-07 on the NEW elevated-oblique scene mount:
+   ;; 3-point open-jaw gap probe at depth z=417 around (30,10):
+   ;; +25x -> (+38.5,+14) px, -25y -> (+17,-25.5) px, i.e.
+   ;; J = [[1.54 -0.68] [0.56 1.02]] px/mm (~1.2-1.6 px/mm scale);
+   ;; gap repeatability 0.5 px; hover probe agreed (x-col 1.53,0.60).
+   :jinv [[0.523 0.348] [-0.287 0.789]]
    ;; SERVO SIGNAL CHANGE (2026-07-05 night): the servo now tracks the
    ;; JAW GAP-CENTER, not the laser cross. Post arm-reattachment the
    ;; cross detection became unstable (rigid cross-gap offset swung
@@ -48,7 +53,9 @@
    ;; at staging): servo the hover gap onto pecan+comp so the tips
    ;; land ON the pecan when they descend. Re-measure after effector
    ;; work: hover + depth capture at staging.
-   :comp-px [-4.0 -21.5]
+   ;; RE-MEASURED 2026-07-07 (new mount): hover (733,412.5) ->
+   ;; depth (728,430.5) at staging (30,10), z 400->417.
+   :comp-px [5.0 -18.0]
    ;; PECAN HEIGHT PARALLAX (Bill's catch, 2026-07-05 night, from a
    ;; zoomed photo: "the gripper is always offset from center"): the
    ;; pecan's image CENTROID rides ~8.5 mm up the nut and projects
@@ -57,7 +64,9 @@
    ;; "converged" close was ~5-14 mm off, always the same direction.
    ;; Derived from the measured tip parallax ((-4,-21.5) px per 14 mm
    ;; of height): footprint = centroid + 8.5/14 * (4, 21.5).
-   :pecan-height-comp-px [2.4 13.1]
+   ;; RE-DERIVED 2026-07-07 (new mount): tip parallax (+5,-18) px
+   ;; per 17 mm of height -> footprint = centroid + 8.5/17*(-5, 18).
+   :pecan-height-comp-px [-2.5 9.0]
    :hover-z 400
    :lift-z 385
    ;; servo tolerance is SCALE-BOUND: 8 px was 1.3 mm at the old
@@ -94,6 +103,13 @@
             :orient-tol-deg 45}
    ;; workspace clamp for ALL commanded xy (CLI enforces its own too)
    :xy-bound 80
+   ;; servo/nudge staging spot (arm xy). POSE-BOUND: must put the
+   ;; hover jaw gap comfortably INSIDE the platform quad or tip
+   ;; detection refuses (:no-gap — n9/n10 both died at the old
+   ;; [-55 0], whose jaws fall outside the 2026-07-07 mount's quad).
+   ;; (30,10) is the 2026-07-07 probe spot: gap verified detectable
+   ;; at hover AND depth there.
+   :staging [30 10]
    ;; random deposit region (arm coords, comfortably on the platform)
    :deposit {:x [-75 -35] :y [-25 25]}
    :budget 20})
@@ -394,7 +410,7 @@
         push-z 414              ; tips ~3 mm off the paper: contact the
                                 ; pecan's lower flank, below its center
         plan-cfg {:end-offset-px 22 :approach-px 38 :follow-px 26}
-        staging [-55 0]
+        staging (:staging cfg)
         clamp-xy (fn [[x y]] [(clamp (Math/round (double x)) (- xy-bound) xy-bound)
                               (clamp (Math/round (double y)) (- xy-bound) xy-bound)])]
     ;; measure the closing axis with jaws OPEN — closed jaws merge
@@ -530,8 +546,9 @@
               (finish! {:verdict :no-target :pre pre})
               (do
                 ;; move into the workspace before servoing
-                (motion/move-to -55 0 (:hover-z cfg))
-                (let [servo (servo-cross-to! [-55 0] target)]
+                (let [[sx sy] (:staging cfg)]
+                  (motion/move-to sx sy (:hover-z cfg)))
+                (let [servo (servo-cross-to! (:staging cfg) target)]
                   (if (not= :converged (:status servo))
                     (do (motion/home)
                         (finish! {:verdict :servo-failed :servo servo

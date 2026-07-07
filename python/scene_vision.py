@@ -28,8 +28,11 @@ import numpy as np
 # rect swallows the strut/pen/clutter beside it. Corners measured
 # from the banked reference frame; POSE-BOUND like every pixel
 # constant here (see the tripwire check).
-PLATFORM_QUAD = np.array([(390, 120), (585, 470), (245, 740), (5, 335)],
-                         dtype=np.int32)   # overhead mount, 2026-07-05 night
+PLATFORM_QUAD = np.array([(699, 263), (928, 481), (673, 626), (472, 350)],
+                         dtype=np.int32)   # elevated-oblique mount, 2026-07-07
+                                           # (tape centroids, thresh 100 on the
+                                           # post-home frame; top corner only
+                                           # visible with the arm at home)
 EXPOSURE = 25        # starting guess; capture() adapts to ambient light
 LASER_EXPOSURE = 2   # laser-isolation frame (exp=1 starves the lines:
                      # in-quad max 148 vs saturated at exp=2)
