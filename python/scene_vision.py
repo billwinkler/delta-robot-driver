@@ -297,13 +297,29 @@ def find_pecan(gray):
 
 MIN_JAW_HEIGHT = 60   # px: jaw fingers are tall; pecans are not
 MIN_FINGER_WIDTH = 8  # px: ignore skinny noise columns
-JAW_SIDE_MARGIN = 40  # px: the perforated strut enters from the sides
+JAW_SIDE_MARGIN = 25  # px: strut rejection; 40 made the far band unconvergeable (2026-07-07)
 JAW_PAIR_DX = (20, 150)   # tip separation range, px
 JAW_PAIR_DY = 60          # max tip height difference, px
+TIP_PAIR_VEC = (56, 15)   # left-tip -> right-tip image vector at open
+                          # hover, POSE-BOUND (2026-07-07 mount: (58,13)
+                          # (55,15) (57,15) (52,16) across the session's
+                          # frames). Used only to reconstruct a tip the
+                          # pecan occludes; verify-at-depth remains the
+                          # precision stage.
 
 
-def find_jaw_tips(gray):
+def find_jaw_tips(gray, exclude=None):
     """Locate the two gripper jaw tips and their gap center.
+
+    exclude: optional (x, y, r) disc to remove from the dark mask,
+    FALLBACK-ONLY: the plain detection runs first and short-circuits,
+    so every frame that detects today is byte-identical. The disc is
+    for the KNOWN pecan position (unmoved since precheck): near servo
+    convergence on the elevated-oblique mount the hover jaws visually
+    merge with the pecan into one blob whose bottom profile is a
+    single pecan-shaped finger — the two real tips flank the disc and
+    reappear once it is removed (2026-07-07 reliability trial 1:
+    servo died :no-gap at 18.9 px error, one iteration from tol).
 
     The jaws are the dark components that hang from the ROI top edge
     (exactly the property find_pecan uses to reject them). Their tips
@@ -319,12 +335,50 @@ def find_jaw_tips(gray):
 
     Returns (tips, gap_center) or (None, None).
     """
+    tips, gap = _jaw_tips_impl(gray, None)
+    if exclude is None:
+        return tips, gap
+    ex, ey, er = exclude
+    # contaminated = a "tip" is actually the pecan (trial 3: the
+    # pecan paired with one real jaw tip at 85 px separation and
+    # the biased gap steered the servo into an overshoot)
+    trusted = ([] if tips is None else
+               [t for t in tips
+                if (t[0] - ex) ** 2 + (t[1] - ey) ** 2 >= er ** 2])
+    contaminated = tips is not None and len(trusted) < len(tips)
+    if not (tips is None or contaminated):
+        return tips, gap
+    tips2, gap2 = _jaw_tips_impl(gray, exclude)
+    if tips2 is not None:
+        return tips2, gap2
+    if len(trusted) == 1:
+        # the other tip is occluded BY the pecan (exclusion found
+        # nothing to rescue) — reconstruct it from the stable
+        # tip-to-tip image vector (trial 5: real left tip directly
+        # behind the pecan at mid-approach)
+        (rx, ry) = trusted[0]
+        if rx >= ex:                       # trusted the RIGHT tip
+            other = [rx - TIP_PAIR_VEC[0], ry - TIP_PAIR_VEC[1]]
+        else:
+            other = [rx + TIP_PAIR_VEC[0], ry + TIP_PAIR_VEC[1]]
+        pair = sorted([[float(rx), float(ry)], other])
+        gap = [round((pair[0][0] + pair[1][0]) / 2, 1),
+               round((pair[0][1] + pair[1][1]) / 2, 1)]
+        return [[round(p[0], 1), round(p[1], 1)] for p in pair], gap
+    return None, None
+
+
+def _jaw_tips_impl(gray, exclude):
     # full-frame dark components; a JAW is one that overlaps the
     # platform quad but PIERCES its boundary from outside (the quad
     # replacement for the old "hangs from the ROI top edge" test —
     # exactly the property find_pecan uses to reject them)
     _, dark = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
     dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    if exclude is not None:
+        ex, ey, er = exclude
+        cv2.circle(dark, (int(round(ex)), int(round(ey))),
+                   int(round(er)), 0, -1)
     qmask = _quad_mask(gray.shape)
 
     n, labels, stats, _ = cv2.connectedComponentsWithStats(dark)
@@ -418,6 +472,10 @@ def main():
         laser_frame = args[args.index("--laser-frame") + 1]
     if "--save" in args:
         save = args[args.index("--save") + 1]
+    exclude = None
+    if "--exclude" in args:
+        exclude = tuple(float(v) for v in
+                        args[args.index("--exclude") + 1].split(","))
     if frame is None:
         frame = save or tempfile.mktemp(suffix=".jpg", prefix="scene-")
         frame, laser_frame = capture_pair(frame)
@@ -440,7 +498,7 @@ def main():
     if cross is None:
         cross = find_cross(gray)
 
-    jaws, gap = find_jaw_tips(gray)
+    jaws, gap = find_jaw_tips(gray, exclude)
     pecan, pecan_angle = find_pecan(gray)
     print(json.dumps({"cross": cross,
                       "pecan": pecan,

@@ -93,7 +93,15 @@
    ;; no bump — a human must reposition; the arm has no wrist)
    ;; tol tightened 15->8 px (~4.5 mm) after n18: hard pads eject a
    ;; convex nut at ~3.5 mm off-center — shrink the squirt window
-   :verify {:tol-px 8 :max-corrections 5 :pecan-radius-px 130
+   ;; :pecan-radius-px rescaled 130->60 (2026-07-07): the constant
+   ;; was calibrated at the old 6 px/mm camera (130 px = 22 mm); at
+   ;; this mount's ~1.4 px/mm it meant 93 mm and admitted the ARM'S
+   ;; DAYLIGHT SHADOW as a "pecan" 120 px from the gap (reliability
+   ;; trial 11: verify oscillated between the shadow and :pre for 5
+   ;; corrections). 60 px ~ 43 mm still accepts real strike-rolls
+   ;; (26-52 px observed); a >60 px roll degrades to :pre + honest
+   ;; :missed, recovered by the next attempt's fresh precheck.
+   :verify {:tol-px 8 :max-corrections 5 :pecan-radius-px 60
             :gain 1.0
             ;; 45 = advisory-grade: the perpendicularity test compares
             ;; IMAGE angles, and the oblique camera distorts them (a
@@ -110,6 +118,13 @@
    ;; (30,10) is the 2026-07-07 probe spot: gap verified detectable
    ;; at hover AND depth there.
    :staging [30 10]
+   ;; radius of the jaw-tip detector's pecan-exclusion disc (fires on
+   ;; tip-detection failure OR a tip landing inside the disc, i.e.
+   ;; pecan-as-tip contamination). 26 = pecan blob half-extent +
+   ;; margin at the 2026-07-07 scale, and safely under the ~29 px
+   ;; distance of a GENUINE tip from the pecan centroid at converged
+   ;; hover — the disc can never eat a real tip.
+   :pecan-exclude-r-px 26
    ;; random deposit region (arm coords, comfortably on the platform)
    :deposit {:x [-75 -35] :y [-25 25]}
    :budget 20})
@@ -286,24 +301,33 @@
     log))
 
 (defn vision!
-  "Capture + analyze one scene frame. Returns {:cross [..] :pecan [..]}."
-  [tag]
-  (let [dir (:frame-dir cfg)
-        _ (io/make-parents (str dir "/x"))
-        path (str dir "/" (System/currentTimeMillis) "-" tag ".jpg")
-        out (:out (shell {:out :string}
-                         (:python cfg) (:vision-script cfg) "--save" path))]
-    (json/parse-string out true)))
+  "Capture + analyze one scene frame. Returns {:cross [..] :pecan [..]}.
+  exclude-px: optional [x y] whose disc the jaw-tip detector may
+  remove as a FALLBACK when plain detection fails — pass the known
+  (unmoved) pecan position so a pecan visually merged into the jaw
+  blob can't collapse the two-tip profile (see find_jaw_tips)."
+  ([tag] (vision! tag nil))
+  ([tag exclude-px]
+   (let [dir (:frame-dir cfg)
+         _ (io/make-parents (str dir "/x"))
+         path (str dir "/" (System/currentTimeMillis) "-" tag ".jpg")
+         args (concat [(:python cfg) (:vision-script cfg) "--save" path]
+                      (when exclude-px
+                        ["--exclude" (str (first exclude-px) ","
+                                          (second exclude-px) ","
+                                          (:pecan-exclude-r-px cfg 32))]))
+         out (:out (apply shell {:out :string} args))]
+     (json/parse-string out true))))
 
 (defn servo-cross-to!
   "Iteratively drive the laser cross to a fixed scene-px target.
   Only the cross is detected per iteration (jaw-immune).
   Returns {:status :converged/:no-cross/:max-iters
            :xy [x y] :iters n :final-err [ex ey]}."
-  [start-xy target]
+  [start-xy target & [pecan-px]]
   (let [{:keys [servo hover-z xy-bound]} cfg]
     (loop [xy start-xy, i 0]
-      (let [v (vision! (str "servo-" i))
+      (let [v (vision! (str "servo-" i) pecan-px)
             signal (:gap-center v)
             err (cross-error signal target)]
         (cond
@@ -548,7 +572,8 @@
                 ;; move into the workspace before servoing
                 (let [[sx sy] (:staging cfg)]
                   (motion/move-to sx sy (:hover-z cfg)))
-                (let [servo (servo-cross-to! (:staging cfg) target)]
+                (let [servo (servo-cross-to! (:staging cfg) target
+                                             (:pecan pre))]
                   (if (not= :converged (:status servo))
                     (do (motion/home)
                         (finish! {:verdict :servo-failed :servo servo
