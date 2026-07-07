@@ -76,7 +76,13 @@
    ;; only needs to deliver the arm near the pecan — the verify loop
    ;; at grip depth is the precision stage. Gain lowered to damp
    ;; oscillation from residual Jacobian error.
-   :servo {:gain 0.6 :tol-px 18 :max-iters 10 :max-step-mm 25}
+   ;; tol-px RESCALED 18->10 (2026-07-07 reliability forensics): 18 px
+   ;; at this mount's ~1.4 px/mm is a 13 mm strike budget — descends
+   ;; landed jaw tips ON the pecan and ROLLED it (t13/t14 closed on
+   ;; empty paper where the pecan used to be). The hover pecan-
+   ;; exclusion fixes are what make a tighter tol convergeable at all
+   ;; (the old merge-collapse near convergence forced 18).
+   :servo {:gain 0.6 :tol-px 10 :max-iters 10 :max-step-mm 25}
    ;; descend-verify-correct (2026-07-04): at grip depth the jaw tips
    ;; and the pecan share the platform plane, so gap-center vs pecan
    ;; is a parallax-free error — measured, not calibrated. comp-px is
@@ -354,25 +360,33 @@
 
   When the frame's own pecan detection is missing or rejected (the
   pecan often merges into the jaw blob when they touch — live-verify
-  n6 closed beside the pecan this way), the PRE-SERVO pecan position
-  is used instead: the pecan hasn't moved since the precheck and the
-  coordinates live in the same image plane, so gap vs pre-pecan is
-  still a valid error. :assume-contact remains only for the case
-  where not even the jaws are measurable.
+  n6 closed beside the pecan this way), the loop GOES HOME AND LOOKS
+  (2026-07-07 reliability forensics): a descend can STRIKE and ROLL
+  the pecan, and the rolled pecan rests against a jaw — merged,
+  invisible, while the old pecan-has-not-moved assumption quietly
+  converged the gap onto empty paper (t13/t14 closed on the REMEMBERED
+  position; Bill watched it happen). From home the pecan is always
+  visible: if it is where we believed, return and proceed
+  trusting that position; if it rolled, re-aim at the fresh spot.
+  Two rechecks per verify; after that the (now home-confirmed)
+  believed position is used directly. :assume-contact remains only
+  for the case where not even the jaws are measurable.
 
-  Returns {:status :verified | :assume-contact | :no-jaws | :max-corrections
-           :xy [x y] :k n :checks [...]}  — :checks logs every
-  measurement for the attempts log (Phase-4 training data)."
+  Returns {:status :verified | :assume-contact | :no-jaws | :no-target
+           | :max-corrections :xy [x y] :k n :checks [...]}  —
+  :checks logs every measurement for the attempts log (Phase-4
+  training data)."
   [start-xy z-grip pre-pecan]
-  (let [{:keys [verify hover-z xy-bound servo]} cfg
+  (let [{:keys [verify hover-z xy-bound servo jinv]} cfg
         {:keys [tol-px max-corrections pecan-radius-px
                 orient-tol-deg]} verify]
-    (loop [xy start-xy, k 0, checks []]
+    (loop [xy start-xy, k 0, checks [], believed pre-pecan, rechecks 0]
       (motion/move-to (first xy) (second xy) z-grip)
       (let [v (vision! (str "verify-" k))
             gap (:gap-center v)
             seen (pecan-near-gap (:pecan v) gap pecan-radius-px)
-            pecan (or seen (pecan-near-gap pre-pecan gap pecan-radius-px))
+            recheck? (and (nil? seen) gap (< rechecks 2))
+            pecan (or seen (pecan-near-gap believed gap pecan-radius-px))
             err (gap-error gap (footprint pecan))
             orient-ok (if (and seen (:jaws v) (:pecan-angle v))
                         (graspable? (:jaws v) (:pecan-angle v)
@@ -399,10 +413,34 @@
           (not orient-ok)
           {:status :bad-orientation :xy xy :k k :checks checks}
 
+          ;; the frame can't see the pecan — DO NOT trust memory yet:
+          ;; a strike-roll leaves the pecan resting against a jaw,
+          ;; merged and invisible, exactly here. Go home (the pecan
+          ;; is always visible from home), re-locate, and either
+          ;; confirm the believed position or re-aim at the fresh one.
+          recheck?
+          (let [_ (motion/move-to (first xy) (second xy) hover-z)
+                _ (motion/home)
+                rv (vision! (str "relocate-" k))
+                fresh (:pecan rv)]
+            (if (nil? fresh)
+              {:status :no-target :xy xy :k k :checks checks
+               :relocate rv}
+              (let [moved (mapv - fresh believed)
+                    dist (Math/sqrt (+ (* (first moved) (first moved))
+                                       (* (second moved) (second moved))))
+                    xy' (if (> dist 8.0)
+                          (next-position xy (px->mm moved jinv) xy-bound)
+                          xy)]
+                (recur xy' k
+                       (conj (pop checks)
+                             (assoc check :relocated fresh :moved-px dist))
+                       fresh (inc rechecks)))))
+
           ;; jaws measured but neither the frame's pecan nor the
-          ;; pre-servo position is anywhere near them -> the target
-          ;; is genuinely unaccounted for; bet on contact and let the
-          ;; grip frame + lift verdict rule
+          ;; (home-confirmed) believed position is anywhere near them
+          ;; -> the target is genuinely unaccounted for; bet on
+          ;; contact and let the grip frame + lift verdict rule
           (nil? pecan)
           {:status :assume-contact :xy xy :k k :checks checks}
 
@@ -419,7 +457,7 @@
             ;; retreat to hover before moving sideways
             (motion/move-to (first xy) (second xy) hover-z)
             (motion/move-to (first nxt) (second nxt) hover-z)
-            (recur nxt (inc k) checks)))))))
+            (recur nxt (inc k) checks believed rechecks)))))))
 
 (defn nudge-rotate!
   "Rotate the pecan toward a graspable orientation by sweeping the
