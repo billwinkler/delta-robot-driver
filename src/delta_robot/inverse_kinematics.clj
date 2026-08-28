@@ -75,14 +75,20 @@
             nil ; avoid division by zero
             (recur (- alpha (/ f f-prime)) (inc iter))))))))
 
-;; Map alpha (in radians) to theta (in degrees)
-;; theta = (360 - alpha_deg) mod 360
+;; Map alpha (radians) onto a positive angle in [0, 360) degrees.
+;; Only ever used as (comp unwrap compute-theta) -- see delta-calc-inverse.
+;; Over the arm's real travel (alpha in [-25, +85] deg) that composition is
+;; exactly theta = -alpha. The mod/unwrap pair is general angle normalization
+;; that cannot engage here: alpha would have to reach 180 deg, which the
+;; mechanism cannot do.
+;; NB: do not "restore" theta = (360 - alpha_deg) mod 360 -- that formula was
+;; tried, inverts the sign, and was abandoned.
 (defn compute-theta [alpha]
-  (let [alpha-deg (* alpha rad-to-deg)
-        theta-deg (- 360.0 alpha-deg)]
-    (mod alpha-deg 360.0)))
+  (mod (* alpha rad-to-deg) 360.0))
 
-;; Unwrap angles greater than 180, to become negative degrees from x-axis
+;; Map an angle in [0, 360) onto the driver's signed convention, measured
+;; clockwise from the +x axis: angles below 180 negate, angles at or above 180
+;; wrap back down through zero.
 (defn unwrap [angle]
   (if (< angle 180) (- angle) (- 360 angle)))
 
